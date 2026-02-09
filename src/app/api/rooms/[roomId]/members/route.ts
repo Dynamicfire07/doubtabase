@@ -9,6 +9,11 @@ import { roomIdSchema } from "@/lib/validation/room";
 
 export const dynamic = "force-dynamic";
 
+const READ_CACHE_HEADERS = {
+  "Cache-Control": "private, max-age=15, stale-while-revalidate=45",
+  Vary: "Cookie, Authorization",
+};
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ roomId: string }> },
@@ -45,7 +50,7 @@ export async function GET(
         is_current_user: member.user_id === user.id,
       })),
       room: roomContext.room,
-    });
+    }, { headers: READ_CACHE_HEADERS });
   } catch (error) {
     if (error instanceof ZodError) {
       return validationErrorResponse(error);

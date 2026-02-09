@@ -9,7 +9,9 @@ import {
 } from "@/lib/api/response";
 import { SUPABASE_ATTACHMENTS_BUCKET } from "@/lib/constants";
 import { decodeDoubtCursor, encodeDoubtCursor } from "@/lib/doubts/cursor";
-import { logError, logInfo } from "@/lib/logger";
+import { logError, logInfo, logWarn } from "@/lib/logger";
+import { sendNewDoubtNotificationEmail } from "@/lib/notifications/doubt-email";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   createDoubtSchema,
   normalizeCreateInput,
@@ -17,6 +19,12 @@ import {
 } from "@/lib/validation/doubt";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+const READ_CACHE_HEADERS = {
+  "Cache-Control": "private, max-age=15, stale-while-revalidate=45",
+  Vary: "Cookie, Authorization",
+};
 
 export async function GET(request: NextRequest) {
   const auth = await requireUserContext();
@@ -218,7 +226,7 @@ export async function GET(request: NextRequest) {
         subtopics,
         error_tags: errorTags,
       },
-    });
+    }, { headers: READ_CACHE_HEADERS });
   } catch (error) {
     if (error instanceof ZodError) {
       return validationErrorResponse(error);
@@ -272,6 +280,91 @@ export async function POST(request: NextRequest) {
       room_id: roomContext.room.id,
       doubt_id: data.id,
     });
+
+    if (!roomContext.room.is_personal) {
+      try {
+        const admin = createSupabaseAdminClient();
+
+        const { data: memberRows, error: memberError } = await admin
+          .from("room_members")
+          .select("user_id")
+          .eq("room_id", roomContext.room.id)
+          .neq("user_id", user.id);
+
+        if (memberError) {
+          throw memberError;
+        }
+
+        const recipients = (
+          await Promise.all(
+            memberRows.map(async (member) => {
+              const { data: memberUser, error: memberLookupError } =
+                await admin.auth.admin.getUserById(member.user_id);
+
+              if (memberLookupError || !memberUser.user?.email) {
+                logWarn("api.doubts.notify.member_lookup_failed", {
+                  user_id: user.id,
+                  room_id: roomContext.room.id,
+                  target_user_id: member.user_id,
+                  error: memberLookupError?.message ?? "Missing email",
+                });
+                return null;
+              }
+
+              const fullName =
+                typeof memberUser.user.user_metadata.full_name === "string"
+                  ? memberUser.user.user_metadata.full_name.trim()
+                  : "";
+
+              return {
+                email: memberUser.user.email,
+                name: fullName || null,
+              };
+            }),
+          )
+        ).filter((recipient): recipient is { email: string; name: string | null } =>
+          Boolean(recipient),
+        );
+
+        const uploaderName =
+          typeof user.user_metadata.full_name === "string" &&
+          user.user_metadata.full_name.trim()
+            ? user.user_metadata.full_name.trim()
+            : user.email ?? "A room member";
+
+        const notification = await sendNewDoubtNotificationEmail({
+          recipients,
+          roomName: roomContext.room.name,
+          roomId: roomContext.room.id,
+          doubtId: data.id,
+          doubtTitle: data.title,
+          subject: data.subject,
+          difficulty: data.difficulty,
+          uploaderName,
+          appBaseUrl: process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin,
+        });
+
+        logInfo("api.doubts.notify.sent", {
+          user_id: user.id,
+          room_id: roomContext.room.id,
+          doubt_id: data.id,
+          attempted: notification.attempted,
+          accepted: notification.accepted,
+          rejected: notification.rejected,
+          skipped: notification.skipped,
+        });
+      } catch (notificationError) {
+        logWarn("api.doubts.notify.failed", {
+          user_id: user.id,
+          room_id: roomContext.room.id,
+          doubt_id: data.id,
+          error:
+            notificationError instanceof Error
+              ? notificationError.message
+              : "Unknown error",
+        });
+      }
+    }
 
     return NextResponse.json(
       {

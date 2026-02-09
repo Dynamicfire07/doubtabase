@@ -26,6 +26,7 @@ Production-ready web app to capture, filter, search, and collaborate on doubts i
 - Attachment uploads via presigned URLs (private bucket)
 - Realtime sync across members in open rooms
 - Room-scoped comments on doubt detail pages
+- Shared-room email notification on new doubts (SMTP)
 - `/api/health` endpoint for uptime monitoring
 - Structured JSON logs for API actions/errors
 
@@ -53,6 +54,7 @@ Optional:
 
 - `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN`
 - `SUPABASE_ATTACHMENTS_BUCKET` (defaults to `doubts-attachments`)
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (for shared-room doubt email notifications)
 
 4. Apply SQL migrations in Supabase SQL Editor, in order:
 

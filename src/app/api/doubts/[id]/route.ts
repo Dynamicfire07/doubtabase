@@ -18,6 +18,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const READ_CACHE_HEADERS = {
+  "Cache-Control": "private, max-age=10, stale-while-revalidate=30",
+  Vary: "Cookie, Authorization",
+};
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -132,7 +137,7 @@ export async function GET(
       room,
       attachments: serializedAttachments,
       comments: serializedComments,
-    });
+    }, { headers: READ_CACHE_HEADERS });
   } catch (error) {
     logError("api.doubts.get_failed", {
       user_id: user.id,

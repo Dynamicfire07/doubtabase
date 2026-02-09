@@ -46,6 +46,10 @@ type MembersResponse = {
   items: RoomMember[];
 };
 
+type LoadOptions = {
+  fresh?: boolean;
+};
+
 const initialDraftRow: DraftRow = {
   title: "",
   subject: "",
@@ -189,11 +193,11 @@ export function DashboardClient() {
   );
 
   const loadRooms = useCallback(
-    async (roomToSelect?: string | null) => {
+    async (roomToSelect?: string | null, options: LoadOptions = {}) => {
       setIsRoomsLoading(true);
 
       const response = await fetch("/api/rooms", {
-        cache: "no-store",
+        cache: options.fresh ? "no-store" : "default",
       });
 
       if (!response.ok) {
@@ -225,7 +229,11 @@ export function DashboardClient() {
   );
 
   const fetchDoubts = useCallback(
-    async (cursor?: string, append = false) => {
+    async (
+      cursor?: string,
+      append = false,
+      options: LoadOptions = {},
+    ) => {
       if (!selectedRoomId) {
         setDoubts([]);
         setNextCursor(null);
@@ -261,7 +269,7 @@ export function DashboardClient() {
       }
 
       const response = await fetch(`/api/doubts?${params.toString()}`, {
-        cache: "no-store",
+        cache: options.fresh ? "no-store" : "default",
       });
 
       if (!response.ok) {
@@ -284,27 +292,30 @@ export function DashboardClient() {
     [appliedFilters, selectedRoomId],
   );
 
-  const fetchMembers = useCallback(async () => {
-    if (!selectedRoomId) {
-      setRoomMembers([]);
-      return;
-    }
+  const fetchMembers = useCallback(
+    async (options: LoadOptions = {}) => {
+      if (!selectedRoomId) {
+        setRoomMembers([]);
+        return;
+      }
 
-    setIsMembersLoading(true);
+      setIsMembersLoading(true);
 
-    const response = await fetch(`/api/rooms/${selectedRoomId}/members`, {
-      cache: "no-store",
-    });
+      const response = await fetch(`/api/rooms/${selectedRoomId}/members`, {
+        cache: options.fresh ? "no-store" : "default",
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        setIsMembersLoading(false);
+        return;
+      }
+
+      const data = (await response.json()) as MembersResponse;
+      setRoomMembers(data.items);
       setIsMembersLoading(false);
-      return;
-    }
-
-    const data = (await response.json()) as MembersResponse;
-    setRoomMembers(data.items);
-    setIsMembersLoading(false);
-  }, [selectedRoomId]);
+    },
+    [selectedRoomId],
+  );
 
   const scheduleRealtimeRefresh = useCallback(() => {
     if (refreshTimerRef.current) {
@@ -312,8 +323,8 @@ export function DashboardClient() {
     }
 
     refreshTimerRef.current = setTimeout(() => {
-      void fetchDoubts();
-      void fetchMembers();
+      void fetchDoubts(undefined, false, { fresh: true });
+      void fetchMembers({ fresh: true });
     }, 250);
   }, [fetchDoubts, fetchMembers]);
 
@@ -530,7 +541,7 @@ export function DashboardClient() {
       }
 
       resetDraftRow();
-      await fetchDoubts();
+      await fetchDoubts(undefined, false, { fresh: true });
     } catch (submissionError) {
       setError(
         submissionError instanceof Error
@@ -570,7 +581,7 @@ export function DashboardClient() {
       return;
     }
 
-    await fetchDoubts();
+    await fetchDoubts(undefined, false, { fresh: true });
   }
 
   async function onDelete(item: Doubt) {
@@ -600,7 +611,7 @@ export function DashboardClient() {
       resetDraftRow();
     }
 
-    await fetchDoubts();
+    await fetchDoubts(undefined, false, { fresh: true });
   }
 
   async function onCreateRoom(event: FormEvent<HTMLFormElement>) {
@@ -628,8 +639,8 @@ export function DashboardClient() {
 
       const data = (await response.json()) as { item: Room };
       setNewRoomName("");
-      await loadRooms(data.item.id);
-      await fetchMembers();
+      await loadRooms(data.item.id, { fresh: true });
+      await fetchMembers({ fresh: true });
     } catch (roomError) {
       setError(roomError instanceof Error ? roomError.message : "Unable to create room");
     } finally {
@@ -662,8 +673,8 @@ export function DashboardClient() {
 
       const data = (await response.json()) as { room_id: string };
       setJoinCode("");
-      await loadRooms(data.room_id);
-      await fetchMembers();
+      await loadRooms(data.room_id, { fresh: true });
+      await fetchMembers({ fresh: true });
     } catch (joinError) {
       setError(joinError instanceof Error ? joinError.message : "Unable to join room");
     } finally {

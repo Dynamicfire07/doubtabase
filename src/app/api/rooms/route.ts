@@ -9,6 +9,11 @@ import { createRoomSchema } from "@/lib/validation/room";
 
 export const dynamic = "force-dynamic";
 
+const READ_CACHE_HEADERS = {
+  "Cache-Control": "private, max-age=20, stale-while-revalidate=60",
+  Vary: "Cookie, Authorization",
+};
+
 function extractErrorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message;
@@ -43,7 +48,10 @@ export async function GET() {
     }
 
     if (memberships.length === 0) {
-      return NextResponse.json({ items: [], default_room_id: null });
+      return NextResponse.json(
+        { items: [], default_room_id: null },
+        { headers: READ_CACHE_HEADERS },
+      );
     }
 
     const roomIds = Array.from(new Set(memberships.map((row) => row.room_id)));
@@ -99,7 +107,7 @@ export async function GET() {
     return NextResponse.json({
       items,
       default_room_id: personal?.id ?? items[0]?.id ?? null,
-    });
+    }, { headers: READ_CACHE_HEADERS });
   } catch (error) {
     logError("api.rooms.list_failed", {
       user_id: user.id,

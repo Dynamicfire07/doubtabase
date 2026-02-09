@@ -31,6 +31,10 @@ type DoubtDetailClientProps = {
   doubtId: string;
 };
 
+type LoadOptions = {
+  fresh?: boolean;
+};
+
 async function parseError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { error?: string };
@@ -75,9 +79,9 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
   const [pageError, setPageError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options: LoadOptions = {}) => {
     const response = await fetch(`/api/doubts/${doubtId}`, {
-      cache: "no-store",
+      cache: options.fresh ? "no-store" : "default",
     });
 
     if (!response.ok) {
@@ -114,7 +118,7 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
           filter: `doubt_id=eq.${doubtId}`,
         },
         () => {
-          void load();
+          void load({ fresh: true });
         },
       )
       .on(
@@ -126,7 +130,7 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
           filter: `id=eq.${doubtId}`,
         },
         () => {
-          void load();
+          void load({ fresh: true });
         },
       )
       .on(
@@ -138,7 +142,7 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
           filter: `doubt_id=eq.${doubtId}`,
         },
         () => {
-          void load();
+          void load({ fresh: true });
         },
       )
       .subscribe();
@@ -237,7 +241,7 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
 
     setCommentDraft("");
     setIsCommentSubmitting(false);
-    await load();
+    await load({ fresh: true });
   }
 
   if (isLoading) {
