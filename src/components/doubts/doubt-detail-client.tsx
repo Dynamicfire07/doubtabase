@@ -37,7 +37,27 @@ type LoadOptions = {
 
 async function parseError(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { error?: string };
+    const body = (await response.json()) as {
+      error?: string;
+      details?: {
+        formErrors?: string[];
+        fieldErrors?: Record<string, string[] | undefined>;
+      };
+    };
+
+    const formError = body.details?.formErrors?.find(Boolean);
+    if (formError) {
+      return formError;
+    }
+
+    const fieldEntry = Object.entries(body.details?.fieldErrors ?? {}).find(
+      ([, messages]) => Array.isArray(messages) && messages.length > 0,
+    );
+
+    if (fieldEntry && fieldEntry[1]) {
+      return `${fieldEntry[0]}: ${fieldEntry[1][0]}`;
+    }
+
     return body.error ?? `Request failed with ${response.status}`;
   } catch {
     return `Request failed with ${response.status}`;

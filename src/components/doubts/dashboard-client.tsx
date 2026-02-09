@@ -113,7 +113,27 @@ function difficultyBadgeClass(difficulty: Difficulty) {
 
 async function parseError(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { error?: string };
+    const body = (await response.json()) as {
+      error?: string;
+      details?: {
+        formErrors?: string[];
+        fieldErrors?: Record<string, string[] | undefined>;
+      };
+    };
+
+    const formError = body.details?.formErrors?.find(Boolean);
+    if (formError) {
+      return formError;
+    }
+
+    const fieldEntry = Object.entries(body.details?.fieldErrors ?? {}).find(
+      ([, messages]) => Array.isArray(messages) && messages.length > 0,
+    );
+
+    if (fieldEntry && fieldEntry[1]) {
+      return `${fieldEntry[0]}: ${fieldEntry[1][0]}`;
+    }
+
     return body.error ?? `Request failed with ${response.status}`;
   } catch {
     return `Request failed with ${response.status}`;
@@ -178,7 +198,8 @@ export function DashboardClient() {
 
   const updateRoomInUrl = useCallback(
     (roomId: string | null) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const currentQuery = searchParams.toString();
+      const params = new URLSearchParams(currentQuery);
 
       if (roomId) {
         params.set("room", roomId);
@@ -186,8 +207,15 @@ export function DashboardClient() {
         params.delete("room");
       }
 
-      const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      const nextQuery = params.toString();
+
+      if (nextQuery === currentQuery) {
+        return;
+      }
+
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
+        scroll: false,
+      });
     },
     [pathname, router, searchParams],
   );
@@ -331,14 +359,6 @@ export function DashboardClient() {
   useEffect(() => {
     void loadRooms();
   }, [loadRooms]);
-
-  useEffect(() => {
-    if (!selectedRoomId) {
-      return;
-    }
-
-    updateRoomInUrl(selectedRoomId);
-  }, [selectedRoomId, updateRoomInUrl]);
 
   useEffect(() => {
     void fetchMembers();
@@ -1243,7 +1263,14 @@ export function DashboardClient() {
                     <button
                       key={room.id}
                       type="button"
-                      onClick={() => setSelectedRoomId(room.id)}
+                      onClick={() => {
+                        if (selectedRoomId === room.id) {
+                          return;
+                        }
+
+                        setSelectedRoomId(room.id);
+                        updateRoomInUrl(room.id);
+                      }}
                       className={`btn btn-sm w-full justify-between gap-2 ${
                         selectedRoomId === room.id ? "btn-primary" : "btn-ghost"
                       }`}

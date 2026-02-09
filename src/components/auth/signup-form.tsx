@@ -43,10 +43,18 @@ export function SignupForm() {
 
     setIsSubmitting(true);
 
+    const emailRedirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/login`
+        : process.env.NEXT_PUBLIC_APP_URL
+          ? `${process.env.NEXT_PUBLIC_APP_URL}/login`
+          : undefined;
+
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: trimmedEmail,
       password,
       options: {
+        emailRedirectTo,
         data: {
           full_name: trimmedName,
         },
