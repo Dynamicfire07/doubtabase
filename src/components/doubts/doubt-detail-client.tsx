@@ -265,7 +265,24 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
   }
 
   if (isLoading) {
-    return <span className="loading loading-spinner loading-md text-primary" />;
+    return (
+      <div className="space-y-4">
+        <div className="skeleton h-9 w-64" />
+        <div className="card border border-base-300 bg-base-100 shadow-sm">
+          <div className="card-body space-y-4">
+            <div className="space-y-2">
+              <div className="skeleton h-8 w-3/4" />
+              <div className="skeleton h-4 w-1/2" />
+            </div>
+            <div className="skeleton h-28 w-full rounded-box" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="skeleton h-48 w-full rounded-box" />
+              <div className="skeleton h-48 w-full rounded-box" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (pageError || !data) {
@@ -381,6 +398,8 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
                           src={attachment.public_url_signed}
                           alt="Doubt attachment"
                           className="h-64 w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
                         />
                         <div className="flex justify-end border-t border-base-300 bg-base-100 p-2">
                           <button
@@ -471,6 +490,8 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
               src={selectedImageUrl}
               alt="Full-size doubt attachment"
               className="max-h-[78vh] w-full rounded-box object-contain"
+              loading="eager"
+              decoding="async"
             />
           </div>
           <form method="dialog" className="modal-backdrop">

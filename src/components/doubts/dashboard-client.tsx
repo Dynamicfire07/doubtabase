@@ -11,8 +11,9 @@ import {
   type ChangeEvent,
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { MAX_ATTACHMENT_BYTES, SUPABASE_ATTACHMENTS_BUCKET } from "@/lib/constants";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -46,8 +47,36 @@ type MembersResponse = {
   items: RoomMember[];
 };
 
+type DoubtMetaResponse = {
+  thumbnails: Record<string, string | null>;
+  suggestions: DoubtListResponse["suggestions"];
+};
+
 type LoadOptions = {
   fresh?: boolean;
+};
+
+type ThumbnailLoadState = "idle" | "loading" | "ready";
+
+type RoomsCachePayload = {
+  version: 1;
+  saved_at: number;
+  data: RoomsListResponse;
+};
+
+type PersonalDoubtsCachePayload = {
+  version: 1;
+  saved_at: number;
+  room_id: string;
+  filter_key: string;
+  items: Doubt[];
+  next_cursor: string | null;
+  suggestions: DoubtListResponse["suggestions"];
+};
+
+type MembersCacheEntry = {
+  saved_at: number;
+  items: RoomMember[];
 };
 
 const initialDraftRow: DraftRow = {
@@ -65,6 +94,56 @@ const initialFilterDraft: FilterDraft = {
   subject: "",
   is_cleared: "",
 };
+
+const PERSONAL_CACHE_TTL_MS = 10 * 60 * 1000;
+const ROOMS_CACHE_TTL_MS = 2 * 60 * 1000;
+const MEMBERS_CACHE_TTL_MS = 60 * 1000;
+const ROOMS_CACHE_KEY = "doubtabase.rooms.v1";
+const PERSONAL_DOUBTS_CACHE_PREFIX = "doubtabase.personal-doubts.v1";
+const THUMBNAIL_QUEUE_DELAY_MS = 80;
+const THUMBNAIL_PRELOAD_COUNT = 8;
+
+function readCachedJson<T>(key: string): T | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const value = window.localStorage.getItem(key);
+    if (!value) {
+      return null;
+    }
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedJson(key: string, value: unknown) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Best effort cache only.
+  }
+}
+
+function buildFilterKey(filters: FilterDraft) {
+  return [
+    filters.q.trim().toLowerCase(),
+    filters.subject.trim().toLowerCase(),
+    filters.is_cleared,
+  ]
+    .map((value) => encodeURIComponent(value))
+    .join("|");
+}
+
+function personalDoubtsCacheKey(roomId: string, filters: FilterDraft) {
+  return `${PERSONAL_DOUBTS_CACHE_PREFIX}:${roomId}:${buildFilterKey(filters)}`;
+}
 
 function parseTagCsv(csv: string) {
   const normalized = csv
@@ -149,12 +228,100 @@ function formatUserLabel(member: RoomMember) {
   return `${shortId} (${member.role})`;
 }
 
+function matchesAppliedFilters(item: Doubt, filters: FilterDraft) {
+  const subject = filters.subject.trim().toLowerCase();
+  if (subject && item.subject.trim().toLowerCase() !== subject) {
+    return false;
+  }
+
+  if (filters.is_cleared === "true" && !item.is_cleared) {
+    return false;
+  }
+
+  if (filters.is_cleared === "false" && item.is_cleared) {
+    return false;
+  }
+
+  const query = filters.q.trim().toLowerCase();
+  if (!query) {
+    return true;
+  }
+
+  const haystack = [
+    item.title,
+    item.body_markdown,
+    item.subject,
+    ...item.subtopics,
+    ...item.error_tags,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(query);
+}
+
+function VisibilityProbe({
+  onVisible,
+  children,
+  className,
+}: {
+  onVisible: () => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  const probeRef = useRef<HTMLDivElement | null>(null);
+  const alreadyVisibleRef = useRef(false);
+
+  useEffect(() => {
+    const node = probeRef.current;
+    if (!node || alreadyVisibleRef.current) {
+      return;
+    }
+
+    if (typeof IntersectionObserver === "undefined") {
+      alreadyVisibleRef.current = true;
+      onVisible();
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) {
+          return;
+        }
+
+        alreadyVisibleRef.current = true;
+        observer.disconnect();
+        onVisible();
+      },
+      { rootMargin: "220px 0px" },
+    );
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, [onVisible]);
+
+  return (
+    <div ref={probeRef} className={className}>
+      {children}
+    </div>
+  );
+}
+
 export function DashboardClient() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const thumbnailQueueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeRoomRef = useRef<string | null>(null);
+  const selectedRoomIdRef = useRef<string | null>(null);
+  const requestVersionRef = useRef(0);
+  const inFlightDoubtsRequestRef = useRef<AbortController | null>(null);
+  const thumbnailQueueRef = useRef<Set<string>>(new Set());
+  const thumbnailRequestedIdsRef = useRef<Set<string>>(new Set());
+  const membersCacheRef = useRef<Map<string, MembersCacheEntry>>(new Map());
 
   const [draftRow, setDraftRow] = useState<DraftRow>(initialDraftRow);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -188,18 +355,62 @@ export function DashboardClient() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRoomActionSubmitting, setIsRoomActionSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncingIds, setSyncingIds] = useState<string[]>([]);
+  const [syncErrorIds, setSyncErrorIds] = useState<string[]>([]);
+  const [thumbnailStateById, setThumbnailStateById] = useState<
+    Record<string, ThumbnailLoadState>
+  >({});
 
   const selectedRoom = useMemo(
     () => rooms.find((room) => room.id === selectedRoomId) ?? null,
     [rooms, selectedRoomId],
   );
+  const roomById = useMemo(
+    () => new Map(rooms.map((room) => [room.id, room])),
+    [rooms],
+  );
 
   const canDelete = selectedRoom?.role === "owner";
 
+  const markRowSyncing = useCallback((id: string) => {
+    setSyncingIds((current) => (current.includes(id) ? current : [...current, id]));
+    setSyncErrorIds((current) => current.filter((value) => value !== id));
+  }, []);
+
+  const clearRowSyncing = useCallback((id: string) => {
+    setSyncingIds((current) => current.filter((value) => value !== id));
+  }, []);
+
+  const markRowSyncError = useCallback((id: string) => {
+    setSyncingIds((current) => current.filter((value) => value !== id));
+    setSyncErrorIds((current) => (current.includes(id) ? current : [...current, id]));
+  }, []);
+
+  const remapRowSyncId = useCallback((fromId: string, toId: string) => {
+    setSyncingIds((current) => {
+      const shouldTrack = current.includes(fromId) || current.includes(toId);
+      const cleaned = current.filter(
+        (value) => value !== fromId && value !== toId,
+      );
+      return shouldTrack ? [...cleaned, toId] : cleaned;
+    });
+
+    setSyncErrorIds((current) => {
+      const shouldTrack = current.includes(fromId) || current.includes(toId);
+      const cleaned = current.filter(
+        (value) => value !== fromId && value !== toId,
+      );
+      return shouldTrack ? [...cleaned, toId] : cleaned;
+    });
+  }, []);
+
   const updateRoomInUrl = useCallback(
     (roomId: string | null) => {
-      const currentQuery = searchParams.toString();
-      const params = new URLSearchParams(currentQuery);
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      const params = new URLSearchParams(window.location.search);
 
       if (roomId) {
         params.set("room", roomId);
@@ -208,41 +419,34 @@ export function DashboardClient() {
       }
 
       const nextQuery = params.toString();
+      const currentPath = `${pathname}${window.location.search}`;
+      const nextPath = nextQuery ? `${pathname}?${nextQuery}` : pathname;
 
-      if (nextQuery === currentQuery) {
+      if (nextPath === currentPath) {
         return;
       }
 
-      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
-        scroll: false,
-      });
+      router.replace(nextPath, { scroll: false });
     },
-    [pathname, router, searchParams],
+    [pathname, router],
   );
 
-  const loadRooms = useCallback(
-    async (roomToSelect?: string | null, options: LoadOptions = {}) => {
-      setIsRoomsLoading(true);
-
-      const response = await fetch("/api/rooms", {
-        cache: options.fresh ? "no-store" : "default",
-      });
-
-      if (!response.ok) {
-        setError(await parseError(response));
-        setIsRoomsLoading(false);
-        return;
-      }
-
-      const data = (await response.json()) as RoomsListResponse;
+  const applyRoomsPayload = useCallback(
+    (data: RoomsListResponse, roomToSelect?: string | null) => {
       setRooms(data.items);
 
-      const urlRoom = searchParams.get("room");
       const validRoomIds = new Set(data.items.map((room) => room.id));
+      const urlRoom =
+        typeof window === "undefined"
+          ? null
+          : new URLSearchParams(window.location.search).get("room");
+      const currentSelectedRoomId = selectedRoomIdRef.current;
 
       const targetRoomId =
         (roomToSelect && validRoomIds.has(roomToSelect) ? roomToSelect : null) ??
-        (selectedRoomId && validRoomIds.has(selectedRoomId) ? selectedRoomId : null) ??
+        (currentSelectedRoomId && validRoomIds.has(currentSelectedRoomId)
+          ? currentSelectedRoomId
+          : null) ??
         (urlRoom && validRoomIds.has(urlRoom) ? urlRoom : null) ??
         data.default_room_id;
 
@@ -250,10 +454,189 @@ export function DashboardClient() {
       if ((urlRoom ?? null) !== (targetRoomId ?? null)) {
         updateRoomInUrl(targetRoomId);
       }
-
-      setIsRoomsLoading(false);
     },
-    [searchParams, selectedRoomId, updateRoomInUrl],
+    [updateRoomInUrl],
+  );
+
+  const loadRooms = useCallback(
+    async (roomToSelect?: string | null, options: LoadOptions = {}) => {
+      let usedCachedRooms = false;
+
+      if (!options.fresh) {
+        const cached = readCachedJson<RoomsCachePayload>(ROOMS_CACHE_KEY);
+        if (
+          cached &&
+          cached.version === 1 &&
+          Date.now() - cached.saved_at <= ROOMS_CACHE_TTL_MS
+        ) {
+          applyRoomsPayload(cached.data, roomToSelect);
+          usedCachedRooms = true;
+          setIsRoomsLoading(false);
+        }
+      }
+
+      if (!usedCachedRooms) {
+        setIsRoomsLoading(true);
+      }
+
+      try {
+        const response = await fetch("/api/rooms", {
+          cache: options.fresh ? "no-store" : "default",
+        });
+
+        if (!response.ok) {
+          if (!usedCachedRooms) {
+            setError(await parseError(response));
+          }
+          setIsRoomsLoading(false);
+          return;
+        }
+
+        const data = (await response.json()) as RoomsListResponse;
+        applyRoomsPayload(data, roomToSelect);
+        writeCachedJson(ROOMS_CACHE_KEY, {
+          version: 1,
+          saved_at: Date.now(),
+          data,
+        } satisfies RoomsCachePayload);
+
+        setIsRoomsLoading(false);
+      } catch (requestError) {
+        if (!usedCachedRooms) {
+          setError(
+            requestError instanceof Error
+              ? requestError.message
+              : "Unable to load rooms",
+          );
+        }
+        setIsRoomsLoading(false);
+      }
+    },
+    [applyRoomsPayload],
+  );
+
+  const fetchDoubtMeta = useCallback(
+    async ({
+      roomId,
+      doubtIds,
+      includeSuggestions,
+      options,
+    }: {
+      roomId: string;
+      doubtIds: string[];
+      includeSuggestions: boolean;
+      options?: LoadOptions;
+    }): Promise<boolean> => {
+      try {
+        const uniqueIds = Array.from(new Set(doubtIds)).slice(0, 40);
+        if (uniqueIds.length === 0 && !includeSuggestions) {
+          return true;
+        }
+
+        const params = new URLSearchParams();
+        params.set("room_id", roomId);
+        if (includeSuggestions) {
+          params.set("include_suggestions", "1");
+        }
+        for (const id of uniqueIds) {
+          params.append("id", id);
+        }
+
+        const response = await fetch(`/api/doubts/meta?${params.toString()}`, {
+          cache: options?.fresh ? "no-store" : "default",
+        });
+
+        if (!response.ok || activeRoomRef.current !== roomId) {
+          return false;
+        }
+
+        const data = (await response.json()) as DoubtMetaResponse;
+
+        setDoubts((current) =>
+          current.map((item) => {
+            if (item.room_id !== roomId) {
+              return item;
+            }
+
+            if (!(item.id in data.thumbnails)) {
+              return item;
+            }
+
+            return {
+              ...item,
+              thumbnail_url_signed: data.thumbnails[item.id],
+            };
+          }),
+        );
+
+        if (includeSuggestions) {
+          setSuggestions(data.suggestions);
+        }
+
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [],
+  );
+
+  const queueThumbnailFetch = useCallback(
+    (doubtId: string, roomIdOverride?: string) => {
+      const roomId = roomIdOverride ?? selectedRoomIdRef.current;
+      if (!roomId) {
+        return;
+      }
+
+      if (thumbnailRequestedIdsRef.current.has(doubtId)) {
+        return;
+      }
+
+      thumbnailRequestedIdsRef.current.add(doubtId);
+      setThumbnailStateById((current) => ({
+        ...current,
+        [doubtId]: "loading",
+      }));
+
+      thumbnailQueueRef.current.add(doubtId);
+
+      if (thumbnailQueueTimerRef.current) {
+        return;
+      }
+
+      thumbnailQueueTimerRef.current = setTimeout(() => {
+        thumbnailQueueTimerRef.current = null;
+        const pendingIds = Array.from(thumbnailQueueRef.current);
+        thumbnailQueueRef.current.clear();
+
+        if (pendingIds.length === 0) {
+          return;
+        }
+
+        void (async () => {
+          for (let offset = 0; offset < pendingIds.length; offset += 40) {
+            const batch = pendingIds.slice(offset, offset + 40);
+            const succeeded = await fetchDoubtMeta({
+              roomId,
+              doubtIds: batch,
+              includeSuggestions: false,
+            });
+
+            setThumbnailStateById((current) => {
+              const next = { ...current };
+              for (const id of batch) {
+                next[id] = succeeded ? "ready" : "idle";
+                if (!succeeded) {
+                  thumbnailRequestedIdsRef.current.delete(id);
+                }
+              }
+              return next;
+            });
+          }
+        })();
+      }, THUMBNAIL_QUEUE_DELAY_MS);
+    },
+    [fetchDoubtMeta],
   );
 
   const fetchDoubts = useCallback(
@@ -263,6 +646,10 @@ export function DashboardClient() {
       options: LoadOptions = {},
     ) => {
       if (!selectedRoomId) {
+        if (inFlightDoubtsRequestRef.current) {
+          inFlightDoubtsRequestRef.current.abort();
+          inFlightDoubtsRequestRef.current = null;
+        }
         setDoubts([]);
         setNextCursor(null);
         setSuggestions({ subjects: [], subtopics: [], error_tags: [] });
@@ -270,15 +657,20 @@ export function DashboardClient() {
         return;
       }
 
+      const roomId = selectedRoomId;
+      const isPersonalRoom = roomById.get(roomId)?.is_personal ?? false;
+      const canUseLocalPersonalCache =
+        !append && !cursor && !options.fresh && isPersonalRoom;
+
       if (!append) {
         setIsLoading(true);
       }
 
       setError(null);
-
       const params = new URLSearchParams();
       params.set("limit", "20");
-      params.set("room_id", selectedRoomId);
+      params.set("room_id", roomId);
+      params.set("with_meta", "0");
 
       if (cursor) {
         params.set("cursor", cursor);
@@ -296,28 +688,163 @@ export function DashboardClient() {
         params.set("is_cleared", appliedFilters.is_cleared);
       }
 
-      const response = await fetch(`/api/doubts?${params.toString()}`, {
-        cache: options.fresh ? "no-store" : "default",
-      });
+      if (canUseLocalPersonalCache) {
+        const cached = readCachedJson<PersonalDoubtsCachePayload>(
+          personalDoubtsCacheKey(roomId, appliedFilters),
+        );
 
-      if (!response.ok) {
-        setError(await parseError(response));
+        if (
+          cached &&
+          cached.version === 1 &&
+          cached.room_id === roomId &&
+          cached.filter_key === buildFilterKey(appliedFilters) &&
+          Date.now() - cached.saved_at <= PERSONAL_CACHE_TTL_MS
+        ) {
+          setDoubts(cached.items);
+          setNextCursor(cached.next_cursor);
+          setSuggestions(cached.suggestions);
+          setIsLoading(false);
+          setThumbnailStateById((current) => {
+            const next = { ...current };
+            for (const item of cached.items) {
+              if (!next[item.id]) {
+                next[item.id] = "idle";
+              }
+            }
+            return next;
+          });
+
+          for (const item of cached.items.slice(0, THUMBNAIL_PRELOAD_COUNT)) {
+            queueThumbnailFetch(item.id, roomId);
+          }
+        }
+      }
+
+      if (inFlightDoubtsRequestRef.current) {
+        inFlightDoubtsRequestRef.current.abort();
+      }
+
+      const abortController = new AbortController();
+      inFlightDoubtsRequestRef.current = abortController;
+      const requestVersion = ++requestVersionRef.current;
+
+      try {
+        const response = await fetch(`/api/doubts?${params.toString()}`, {
+          cache: options.fresh ? "no-store" : "default",
+          signal: abortController.signal,
+        });
+
+        if (requestVersion !== requestVersionRef.current) {
+          if (inFlightDoubtsRequestRef.current === abortController) {
+            inFlightDoubtsRequestRef.current = null;
+          }
+          return;
+        }
+
+        if (!response.ok) {
+          setError(await parseError(response));
+          setIsLoading(false);
+          if (inFlightDoubtsRequestRef.current === abortController) {
+            inFlightDoubtsRequestRef.current = null;
+          }
+          return;
+        }
+
+        const data = (await response.json()) as DoubtListResponse;
+        if (requestVersion !== requestVersionRef.current) {
+          if (inFlightDoubtsRequestRef.current === abortController) {
+            inFlightDoubtsRequestRef.current = null;
+          }
+          return;
+        }
+
+        if (!append) {
+          thumbnailRequestedIdsRef.current.clear();
+        }
+
+        setDoubts((current) => (append ? [...current, ...data.items] : data.items));
+        setNextCursor(data.next_cursor);
+
+        setThumbnailStateById((current) => {
+          const next = append ? { ...current } : {};
+          for (const item of data.items) {
+            if (!next[item.id]) {
+              next[item.id] = "idle";
+            }
+          }
+          return next;
+        });
+
+        if (!append) {
+          if (
+            data.suggestions.subjects.length > 0 ||
+            data.suggestions.subtopics.length > 0 ||
+            data.suggestions.error_tags.length > 0
+          ) {
+            setSuggestions(data.suggestions);
+          }
+
+          void fetchDoubtMeta({
+            roomId,
+            doubtIds: [],
+            includeSuggestions: true,
+            options,
+          });
+
+          for (const item of data.items.slice(0, THUMBNAIL_PRELOAD_COUNT)) {
+            queueThumbnailFetch(item.id, roomId);
+          }
+        }
+
+        if (!append && isPersonalRoom) {
+          writeCachedJson(
+            personalDoubtsCacheKey(roomId, appliedFilters),
+            {
+              version: 1,
+              saved_at: Date.now(),
+              room_id: roomId,
+              filter_key: buildFilterKey(appliedFilters),
+              items: data.items,
+              next_cursor: data.next_cursor,
+              suggestions: data.suggestions,
+            } satisfies PersonalDoubtsCachePayload,
+          );
+        }
+
         setIsLoading(false);
-        return;
+        if (inFlightDoubtsRequestRef.current === abortController) {
+          inFlightDoubtsRequestRef.current = null;
+        }
+      } catch (requestError) {
+        if (
+          requestError instanceof DOMException &&
+          requestError.name === "AbortError"
+        ) {
+          if (inFlightDoubtsRequestRef.current === abortController) {
+            inFlightDoubtsRequestRef.current = null;
+          }
+          return;
+        }
+
+        if (requestVersion !== requestVersionRef.current) {
+          if (inFlightDoubtsRequestRef.current === abortController) {
+            inFlightDoubtsRequestRef.current = null;
+          }
+          return;
+        }
+
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load doubts",
+        );
+        setIsLoading(false);
+        if (inFlightDoubtsRequestRef.current === abortController) {
+          inFlightDoubtsRequestRef.current = null;
+        }
       }
-
-      const data = (await response.json()) as DoubtListResponse;
-
-      setDoubts((current) => (append ? [...current, ...data.items] : data.items));
-      setNextCursor(data.next_cursor);
-
-      if (!append) {
-        setSuggestions(data.suggestions);
-      }
-
-      setIsLoading(false);
     },
-    [appliedFilters, selectedRoomId],
+    [appliedFilters, fetchDoubtMeta, queueThumbnailFetch, roomById, selectedRoomId],
   );
 
   const fetchMembers = useCallback(
@@ -327,20 +854,39 @@ export function DashboardClient() {
         return;
       }
 
-      setIsMembersLoading(true);
-
-      const response = await fetch(`/api/rooms/${selectedRoomId}/members`, {
-        cache: options.fresh ? "no-store" : "default",
-      });
-
-      if (!response.ok) {
+      const cached = membersCacheRef.current.get(selectedRoomId);
+      if (
+        !options.fresh &&
+        cached &&
+        Date.now() - cached.saved_at <= MEMBERS_CACHE_TTL_MS
+      ) {
+        setRoomMembers(cached.items);
         setIsMembersLoading(false);
         return;
       }
 
-      const data = (await response.json()) as MembersResponse;
-      setRoomMembers(data.items);
-      setIsMembersLoading(false);
+      setIsMembersLoading(true);
+
+      try {
+        const response = await fetch(`/api/rooms/${selectedRoomId}/members`, {
+          cache: options.fresh ? "no-store" : "default",
+        });
+
+        if (!response.ok) {
+          setIsMembersLoading(false);
+          return;
+        }
+
+        const data = (await response.json()) as MembersResponse;
+        setRoomMembers(data.items);
+        membersCacheRef.current.set(selectedRoomId, {
+          saved_at: Date.now(),
+          items: data.items,
+        });
+        setIsMembersLoading(false);
+      } catch {
+        setIsMembersLoading(false);
+      }
     },
     [selectedRoomId],
   );
@@ -352,9 +898,20 @@ export function DashboardClient() {
 
     refreshTimerRef.current = setTimeout(() => {
       void fetchDoubts(undefined, false, { fresh: true });
-      void fetchMembers({ fresh: true });
-    }, 250);
-  }, [fetchDoubts, fetchMembers]);
+    }, 120);
+  }, [fetchDoubts]);
+
+  useEffect(() => {
+    activeRoomRef.current = selectedRoomId;
+    selectedRoomIdRef.current = selectedRoomId;
+    thumbnailQueueRef.current.clear();
+    thumbnailRequestedIdsRef.current.clear();
+    if (thumbnailQueueTimerRef.current) {
+      clearTimeout(thumbnailQueueTimerRef.current);
+      thumbnailQueueTimerRef.current = null;
+    }
+    setThumbnailStateById({});
+  }, [selectedRoomId]);
 
   useEffect(() => {
     void loadRooms();
@@ -367,6 +924,19 @@ export function DashboardClient() {
   useEffect(() => {
     void fetchDoubts();
   }, [fetchDoubts]);
+
+  useEffect(() => {
+    return () => {
+      if (thumbnailQueueTimerRef.current) {
+        clearTimeout(thumbnailQueueTimerRef.current);
+        thumbnailQueueTimerRef.current = null;
+      }
+      if (inFlightDoubtsRequestRef.current) {
+        inFlightDoubtsRequestRef.current.abort();
+        inFlightDoubtsRequestRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedRoomId) {
@@ -382,17 +952,6 @@ export function DashboardClient() {
           schema: "public",
           table: "doubts",
           filter: `room_id=eq.${selectedRoomId}`,
-        },
-        () => {
-          scheduleRealtimeRefresh();
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "doubt_attachments",
         },
         () => {
           scheduleRealtimeRefresh();
@@ -510,6 +1069,34 @@ export function DashboardClient() {
     });
   }
 
+  const upsertLocalDoubt = useCallback(
+    (item: Doubt, options?: { prepend?: boolean }) => {
+      setDoubts((current) => {
+        const existingIndex = current.findIndex((value) => value.id === item.id);
+        const withoutItem =
+          existingIndex === -1
+            ? [...current]
+            : current.filter((value) => value.id !== item.id);
+
+        if (!matchesAppliedFilters(item, appliedFilters)) {
+          return withoutItem;
+        }
+
+        if (options?.prepend || existingIndex === -1) {
+          return [item, ...withoutItem];
+        }
+
+        const next = [...current];
+        next[existingIndex] = {
+          ...next[existingIndex],
+          ...item,
+        };
+        return next;
+      });
+    },
+    [appliedFilters],
+  );
+
   async function onAddRow(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -521,56 +1108,119 @@ export function DashboardClient() {
     setIsSubmitting(true);
     setError(null);
 
-    try {
-      const payload = {
-        title: draftRow.title.trim(),
-        body_markdown: draftRow.notes.trim(),
-        subject: draftRow.subject.trim(),
-        subtopics: parseTagCsv(draftRow.subtopicsCsv),
-        difficulty: draftRow.difficulty,
-        error_tags: parseTagCsv(draftRow.errorTagsCsv),
-        is_cleared: draftRow.isCleared,
-      };
+    const isEditing = Boolean(editingId);
+    const editingTargetId = editingId;
+    const filesToUpload = [...selectedFiles];
+    const payload = {
+      title: draftRow.title.trim(),
+      body_markdown: draftRow.notes.trim(),
+      subject: draftRow.subject.trim(),
+      subtopics: parseTagCsv(draftRow.subtopicsCsv),
+      difficulty: draftRow.difficulty,
+      error_tags: parseTagCsv(draftRow.errorTagsCsv),
+      is_cleared: draftRow.isCleared,
+    };
+    const now = new Date().toISOString();
+    const previousItem = editingTargetId
+      ? doubts.find((item) => item.id === editingTargetId) ?? null
+      : null;
+    const optimisticId = isEditing
+      ? editingTargetId!
+      : `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-      const response = await fetch(
-        editingId ? `/api/doubts/${editingId}` : "/api/doubts",
-        {
-          method: editingId ? "PATCH" : "POST",
-          headers: {
-            "Content-Type": "application/json",
+    const optimisticItem: Doubt = {
+      id: optimisticId,
+      room_id: selectedRoomId,
+      created_by_user_id: previousItem?.created_by_user_id ?? "local-user",
+      title: payload.title,
+      body_markdown: payload.body_markdown,
+      subject: payload.subject,
+      subtopics: payload.subtopics,
+      difficulty: payload.difficulty,
+      error_tags: payload.error_tags,
+      is_cleared: payload.is_cleared,
+      thumbnail_url_signed: previousItem?.thumbnail_url_signed ?? null,
+      created_at: previousItem?.created_at ?? now,
+      updated_at: now,
+    };
+
+    upsertLocalDoubt(optimisticItem, { prepend: !isEditing });
+    markRowSyncing(optimisticId);
+    resetDraftRow();
+    setIsSubmitting(false);
+
+    void (async () => {
+      try {
+        const response = await fetch(
+          isEditing ? `/api/doubts/${editingTargetId}` : "/api/doubts",
+          {
+            method: isEditing ? "PATCH" : "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(
+              isEditing
+                ? payload
+                : {
+                    ...payload,
+                    room_id: selectedRoomId,
+                  },
+            ),
           },
-          body: JSON.stringify(
-            editingId
-              ? payload
-              : {
-                  ...payload,
-                  room_id: selectedRoomId,
-                },
-          ),
-        },
-      );
+        );
 
-      if (!response.ok) {
-        throw new Error(await parseError(response));
+        if (!response.ok) {
+          throw new Error(await parseError(response));
+        }
+
+        const data = (await response.json()) as { item: Doubt };
+
+        if (isEditing) {
+          upsertLocalDoubt(data.item);
+        } else {
+          setDoubts((current) =>
+            current.map((item) =>
+              item.id === optimisticId
+                ? {
+                    ...data.item,
+                    thumbnail_url_signed: item.thumbnail_url_signed ?? null,
+                  }
+                : item,
+            ),
+          );
+          remapRowSyncId(optimisticId, data.item.id);
+        }
+
+        if (filesToUpload.length > 0) {
+          await uploadFiles(data.item.id, filesToUpload);
+        }
+
+        clearRowSyncing(data.item.id);
+        void fetchDoubts(undefined, false, { fresh: true });
+      } catch (submissionError) {
+        const message =
+          submissionError instanceof Error
+            ? submissionError.message
+            : "Unable to save doubt";
+
+        if (isEditing) {
+          if (previousItem) {
+            upsertLocalDoubt(previousItem);
+          }
+          if (editingTargetId) {
+            markRowSyncError(editingTargetId);
+          }
+        } else {
+          setDoubts((current) =>
+            current.filter((item) => item.id !== optimisticId),
+          );
+          clearRowSyncing(optimisticId);
+        }
+
+        setError(message);
+        void fetchDoubts(undefined, false, { fresh: true });
       }
-
-      const data = (await response.json()) as { item: Doubt };
-
-      if (selectedFiles.length > 0) {
-        await uploadFiles(data.item.id, selectedFiles);
-      }
-
-      resetDraftRow();
-      await fetchDoubts(undefined, false, { fresh: true });
-    } catch (submissionError) {
-      setError(
-        submissionError instanceof Error
-          ? submissionError.message
-          : "Unable to save doubt",
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
+    })();
   }
 
   function onAddRowShortcut(event: ReactKeyboardEvent<HTMLFormElement>) {
@@ -588,6 +1238,14 @@ export function DashboardClient() {
   }
 
   async function onToggleCleared(item: Doubt) {
+    setError(null);
+    markRowSyncing(item.id);
+    upsertLocalDoubt({
+      ...item,
+      is_cleared: !item.is_cleared,
+      updated_at: new Date().toISOString(),
+    });
+
     const response = await fetch(`/api/doubts/${item.id}/clear`, {
       method: "PATCH",
       headers: {
@@ -598,10 +1256,13 @@ export function DashboardClient() {
 
     if (!response.ok) {
       setError(await parseError(response));
+      markRowSyncError(item.id);
+      void fetchDoubts(undefined, false, { fresh: true });
       return;
     }
 
-    await fetchDoubts(undefined, false, { fresh: true });
+    clearRowSyncing(item.id);
+    void fetchDoubts(undefined, false, { fresh: true });
   }
 
   async function onDelete(item: Doubt) {
@@ -618,12 +1279,18 @@ export function DashboardClient() {
       return;
     }
 
+    setError(null);
+    markRowSyncing(item.id);
+    setDoubts((current) => current.filter((value) => value.id !== item.id));
+
     const response = await fetch(`/api/doubts/${item.id}`, {
       method: "DELETE",
     });
 
     if (!response.ok) {
       setError(await parseError(response));
+      markRowSyncError(item.id);
+      void fetchDoubts(undefined, false, { fresh: true });
       return;
     }
 
@@ -631,7 +1298,8 @@ export function DashboardClient() {
       resetDraftRow();
     }
 
-    await fetchDoubts(undefined, false, { fresh: true });
+    clearRowSyncing(item.id);
+    void fetchDoubts(undefined, false, { fresh: true });
   }
 
   async function onCreateRoom(event: FormEvent<HTMLFormElement>) {
@@ -1079,11 +1747,43 @@ export function DashboardClient() {
 
               <tbody>
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={9} className="text-center text-sm text-base-content/70">
-                      Loading doubts...
-                    </td>
-                  </tr>
+                  Array.from({ length: 6 }).map((_, index) => (
+                    <tr key={`skeleton-row-${index}`} className="align-top">
+                      <td>
+                        <div className="flex min-w-[220px] items-start gap-2">
+                          <div className="skeleton h-14 w-14 shrink-0 rounded-md" />
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <div className="skeleton h-4 w-11/12" />
+                            <div className="skeleton h-3 w-2/3" />
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="skeleton h-3 w-20" />
+                      </td>
+                      <td>
+                        <div className="skeleton h-3 w-28" />
+                      </td>
+                      <td>
+                        <div className="skeleton h-6 w-16 rounded-full" />
+                      </td>
+                      <td>
+                        <div className="skeleton h-3 w-28" />
+                      </td>
+                      <td>
+                        <div className="skeleton h-6 w-16 rounded-full" />
+                      </td>
+                      <td>
+                        <div className="skeleton h-3 w-52" />
+                      </td>
+                      <td>
+                        <div className="skeleton h-3 w-24" />
+                      </td>
+                      <td>
+                        <div className="skeleton h-6 w-20" />
+                      </td>
+                    </tr>
+                  ))
                 ) : doubts.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="text-center text-sm text-base-content/70">
@@ -1094,32 +1794,57 @@ export function DashboardClient() {
                   doubts.map((item) => (
                     <tr key={item.id} className="align-top">
                       <td>
-                        <div className="flex min-w-[220px] items-start gap-2">
-                          {item.thumbnail_url_signed ? (
-                            <div className="avatar">
-                              <div className="h-14 w-14 rounded-md border border-base-300">
-                                {/* Dynamic signed URLs are not known at build time. */}
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={item.thumbnail_url_signed}
-                                  alt="Doubt thumbnail"
-                                  className="h-full w-full object-cover"
-                                />
+                        <VisibilityProbe onVisible={() => queueThumbnailFetch(item.id)}>
+                          <div
+                            className="flex min-w-[220px] items-start gap-2"
+                            onMouseEnter={() => queueThumbnailFetch(item.id)}
+                            onTouchStart={() => queueThumbnailFetch(item.id)}
+                          >
+                            {item.thumbnail_url_signed ? (
+                              <div className="avatar">
+                                <div className="h-14 w-14 rounded-md border border-base-300">
+                                  {/* Dynamic signed URLs are not known at build time. */}
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={item.thumbnail_url_signed}
+                                    alt="Doubt thumbnail"
+                                    className="h-full w-full object-cover"
+                                    loading="lazy"
+                                    decoding="async"
+                                  />
+                                </div>
+                              </div>
+                            ) : (thumbnailStateById[item.id] ?? "idle") === "loading" ||
+                              (thumbnailStateById[item.id] ?? "idle") === "idle" ? (
+                              <div className="skeleton h-14 w-14 shrink-0 rounded-md border border-base-300" />
+                            ) : (
+                              <div className="flex h-14 w-14 items-center justify-center rounded-md border border-base-300 bg-base-200 text-[10px] text-base-content/60">
+                                No img
+                              </div>
+                            )}
+
+                            <div className="min-w-0">
+                              <Link
+                                href={`/doubts/${item.id}?room=${item.room_id}`}
+                                className="line-clamp-2 font-semibold hover:text-primary"
+                              >
+                                {item.title}
+                              </Link>
+                              <div className="mt-1 flex flex-wrap items-center gap-1">
+                                {syncingIds.includes(item.id) ? (
+                                  <span className="badge badge-info badge-outline badge-xs">
+                                    Syncing...
+                                  </span>
+                                ) : null}
+                                {syncErrorIds.includes(item.id) ? (
+                                  <span className="badge badge-error badge-outline badge-xs">
+                                    Sync failed
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
-                          ) : (
-                            <div className="flex h-14 w-14 items-center justify-center rounded-md border border-base-300 bg-base-200 text-[10px] text-base-content/60">
-                              No img
-                            </div>
-                          )}
-
-                          <Link
-                            href={`/doubts/${item.id}?room=${item.room_id}`}
-                            className="line-clamp-2 font-semibold hover:text-primary"
-                          >
-                            {item.title}
-                          </Link>
-                        </div>
+                          </div>
+                        </VisibilityProbe>
                       </td>
 
                       <td className="text-xs">{item.subject}</td>
@@ -1256,7 +1981,14 @@ export function DashboardClient() {
                 Workspace
               </p>
               {isRoomsLoading ? (
-                <p className="text-sm text-base-content/70">Loading rooms...</p>
+                <div className="space-y-2">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                      key={`room-skeleton-${index}`}
+                      className="skeleton h-9 w-full rounded-lg"
+                    />
+                  ))}
+                </div>
               ) : (
                 <div className="space-y-2">
                   {rooms.map((room) => (
@@ -1374,7 +2106,14 @@ export function DashboardClient() {
               <div className="space-y-2">
                 <p className="text-xs text-base-content/70">Members</p>
                 {isMembersLoading ? (
-                  <p className="text-sm text-base-content/70">Loading members...</p>
+                  <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <div
+                        key={`member-skeleton-${index}`}
+                        className="skeleton h-6 w-full rounded-full"
+                      />
+                    ))}
+                  </div>
                 ) : roomMembers.length === 0 ? (
                   <p className="text-sm text-base-content/70">No members found.</p>
                 ) : (

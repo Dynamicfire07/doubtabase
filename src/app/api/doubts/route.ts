@@ -26,6 +26,11 @@ const READ_CACHE_HEADERS = {
   Vary: "Cookie, Authorization",
 };
 
+function parseWithMeta(searchParams: URLSearchParams) {
+  const value = (searchParams.get("with_meta") ?? "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireUserContext();
   if (auth.error) {
@@ -35,7 +40,9 @@ export async function GET(request: NextRequest) {
   const { supabase, user } = auth.context;
 
   try {
-    const query = parseListDoubtsQuery(new URL(request.url).searchParams);
+    const searchParams = new URL(request.url).searchParams;
+    const query = parseListDoubtsQuery(searchParams);
+    const withMeta = parseWithMeta(searchParams);
     const roomContext = await resolveRoomContext(supabase, user.id, query.room_id);
 
     if (roomContext.error !== null) {
@@ -99,6 +106,45 @@ export async function GET(request: NextRequest) {
 
     const hasMore = data.length > query.limit;
     const items = hasMore ? data.slice(0, query.limit) : data;
+    const nextCursor = hasMore
+      ? encodeDoubtCursor({
+          created_at: items[items.length - 1].created_at,
+          id: items[items.length - 1].id,
+        })
+      : null;
+
+    if (!withMeta) {
+      const serializedItems = items.map((item) => ({
+        id: item.id,
+        room_id: item.room_id,
+        created_by_user_id: item.user_id,
+        title: item.title,
+        body_markdown: item.body_markdown,
+        subject: item.subject,
+        subtopics: item.subtopics,
+        difficulty: item.difficulty,
+        error_tags: item.error_tags,
+        is_cleared: item.is_cleared,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        thumbnail_url_signed: null,
+      }));
+
+      return NextResponse.json(
+        {
+          items: serializedItems,
+          room: roomContext.room,
+          next_cursor: nextCursor,
+          suggestions: {
+            subjects: [],
+            subtopics: [],
+            error_tags: [],
+          },
+        },
+        { headers: READ_CACHE_HEADERS },
+      );
+    }
+
     const suggestionsPromise = query.cursor
       ? Promise.resolve({
           data: [],
@@ -167,13 +213,6 @@ export async function GET(request: NextRequest) {
       { data: suggestionRows, error: suggestionError },
       thumbnailByDoubtId,
     ] = await Promise.all([suggestionsPromise, thumbnailsPromise]);
-
-    const nextCursor = hasMore
-      ? encodeDoubtCursor({
-          created_at: items[items.length - 1].created_at,
-          id: items[items.length - 1].id,
-        })
-      : null;
 
     if (suggestionError) {
       throw suggestionError;
