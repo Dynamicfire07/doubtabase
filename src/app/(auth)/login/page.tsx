@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/components/auth/login-form";
-import { isAuthorizedEmail } from "@/lib/auth/allowed-email";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +11,7 @@ export default async function LoginPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (user && isAuthorizedEmail(user.email)) {
+  if (user) {
     redirect("/dashboard");
   }
 

@@ -47,7 +47,6 @@ cp .env.example .env.local
 Optional but recommended:
 
 - `SUPABASE_SERVICE_ROLE_KEY` (only needed for future admin-level operations)
-- `NEXT_PUBLIC_ALLOWED_EMAIL` (single-user enforcement)
 - `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN`
 
 4. Apply SQL migration in Supabase:
@@ -57,6 +56,8 @@ Optional but recommended:
 5. Disable public signup in Supabase Auth:
 
 - Supabase Dashboard -> Authentication -> Providers -> disable open signup.
+- Supabase Dashboard -> Authentication -> Users -> invite/add only the people you approve.
+- Each user gets their own isolated doubts data via row-level security (`auth.uid() = user_id`).
 
 6. Start dev server:
 
@@ -92,7 +93,7 @@ npm run build
 - Ensure Supabase daily backups are enabled
 - Configure uptime monitor to hit `/api/health` every minute
 - Connect Sentry DSN for client + server error tracking
-- Keep `NEXT_PUBLIC_ALLOWED_EMAIL` set for single-user v1
+- Keep public signup disabled in Supabase Auth and invite only approved users
 
 ## Data Model
 
