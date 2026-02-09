@@ -17,6 +17,11 @@ export const metadata: Metadata = {
   title: "Doubts App",
   description:
     "Capture, filter, and clear doubts with plain-text notes and image attachments.",
+  icons: {
+    icon: "/brand-icon.svg",
+    shortcut: "/brand-icon.svg",
+    apple: "/brand-icon.svg",
+  },
 };
 
 export default function RootLayout({

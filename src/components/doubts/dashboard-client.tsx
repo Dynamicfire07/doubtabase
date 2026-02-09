@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import {
   useCallback,
   useEffect,
@@ -718,7 +719,18 @@ export function DashboardClient() {
       <section className="card border border-base-300 bg-base-100 shadow-sm">
         <div className="card-body gap-2 p-4">
           <div>
-            <h1 className="text-2xl font-bold">Doubt Sheet</h1>
+            <div className="flex items-center gap-3">
+              <div className="relative h-9 w-9 overflow-hidden rounded-lg border border-base-300 bg-base-200">
+                <Image
+                  src="/brand-icon.svg"
+                  alt="Doubts App logo"
+                  fill
+                  className="object-contain p-1"
+                  priority
+                />
+              </div>
+              <h1 className="text-2xl font-bold">Doubt Sheet</h1>
+            </div>
             <p className="text-sm text-base-content/70">
               Room: {selectedRoom?.name ?? "No room selected"}
             </p>
