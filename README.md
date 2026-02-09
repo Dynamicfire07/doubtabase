@@ -1,36 +1,112 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Doubts App (Production MVP)
 
-## Getting Started
+Production-ready web app to capture, filter, search, and clear doubts with plain-text notes and image attachments.
 
-First, run the development server:
+## Stack
+
+- Next.js (App Router, TypeScript)
+- Supabase (Postgres + Auth + Storage)
+- Supabase RLS for per-user data isolation
+- Sentry for frontend/API error tracking
+- Tailwind CSS v4
+- daisyUI components
+- Vitest for unit tests
+
+## Features (v1)
+
+- Email/password login
+- Doubt CRUD
+- Filters: `subject`, `subtopic`, `difficulty`, `error_tag`, `is_cleared`
+- Keyword search over title/body/subject/subtopics/error tags
+- Attachment uploads via presigned URLs (private storage bucket)
+- Signed short-lived download URLs for viewing attachments
+- Plain-text notes (no markdown renderer)
+- Cursor pagination
+- `/api/health` endpoint for uptime monitoring
+- Structured JSON logging for API actions/errors
+
+## Local Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy environment file:
+
+```bash
+cp .env.example .env.local
+```
+
+3. Fill required vars in `.env.local`:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`)
+
+Optional but recommended:
+
+- `SUPABASE_SERVICE_ROLE_KEY` (only needed for future admin-level operations)
+- `NEXT_PUBLIC_ALLOWED_EMAIL` (single-user enforcement)
+- `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN`
+
+4. Apply SQL migration in Supabase:
+
+- Run `supabase/migrations/0001_init.sql` in the Supabase SQL editor.
+
+5. Disable public signup in Supabase Auth:
+
+- Supabase Dashboard -> Authentication -> Providers -> disable open signup.
+
+6. Start dev server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## API Surface
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `POST /api/doubts`
+- `GET /api/doubts?q&subject&subtopic&difficulty&error_tag&is_cleared&cursor&limit`
+- `GET /api/doubts/:id`
+- `PATCH /api/doubts/:id`
+- `DELETE /api/doubts/:id`
+- `PATCH /api/doubts/:id/clear`
+- `POST /api/doubts/:id/attachments/presign`
+- `DELETE /api/attachments/:id`
+- `GET /api/health`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Quality Commands
 
-## Learn More
+```bash
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Production Checklist
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Deploy app to Vercel
+- Configure production env vars in Vercel
+- Ensure Supabase daily backups are enabled
+- Configure uptime monitor to hit `/api/health` every minute
+- Connect Sentry DSN for client + server error tracking
+- Keep `NEXT_PUBLIC_ALLOWED_EMAIL` set for single-user v1
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Data Model
 
-## Deploy on Vercel
+Main tables:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `public.doubts`
+- `public.doubt_attachments`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Enum:
+
+- `public.difficulty_enum` (`easy`, `medium`, `hard`)
+
+Storage bucket:
+
+- `doubts-attachments` (private)
+
+All schema, indexes, RLS, and storage policies are in `supabase/migrations/0001_init.sql`.
