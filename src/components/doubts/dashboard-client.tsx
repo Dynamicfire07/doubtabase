@@ -107,6 +107,7 @@ export function DashboardClient() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   const [draftRow, setDraftRow] = useState<DraftRow>(initialDraftRow);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const [filterDraft, setFilterDraft] = useState<FilterDraft>(initialFilterDraft);
@@ -257,26 +258,49 @@ export function DashboardClient() {
     }
   }
 
+  function startEdit(item: Doubt) {
+    setEditingId(item.id);
+    setError(null);
+    setSelectedFiles([]);
+    setDraftRow({
+      title: item.title,
+      subject: item.subject,
+      subtopicsCsv: item.subtopics.join(", "),
+      difficulty: item.difficulty,
+      errorTagsCsv: item.error_tags.join(", "),
+      isCleared: item.is_cleared,
+      notes: item.body_markdown,
+    });
+  }
+
+  function resetDraftRow() {
+    setDraftRow(initialDraftRow);
+    setSelectedFiles([]);
+    setEditingId(null);
+  }
+
   async function onAddRow(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
     setError(null);
 
     try {
-      const response = await fetch("/api/doubts", {
-        method: "POST",
+      const payload = {
+        title: draftRow.title.trim(),
+        body_markdown: draftRow.notes.trim(),
+        subject: draftRow.subject.trim(),
+        subtopics: parseTagCsv(draftRow.subtopicsCsv),
+        difficulty: draftRow.difficulty,
+        error_tags: parseTagCsv(draftRow.errorTagsCsv),
+        is_cleared: draftRow.isCleared,
+      };
+
+      const response = await fetch(editingId ? `/api/doubts/${editingId}` : "/api/doubts", {
+        method: editingId ? "PATCH" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          title: draftRow.title.trim(),
-          body_markdown: draftRow.notes.trim(),
-          subject: draftRow.subject.trim(),
-          subtopics: parseTagCsv(draftRow.subtopicsCsv),
-          difficulty: draftRow.difficulty,
-          error_tags: parseTagCsv(draftRow.errorTagsCsv),
-          is_cleared: draftRow.isCleared,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -289,14 +313,13 @@ export function DashboardClient() {
         await uploadFiles(data.item.id, selectedFiles);
       }
 
-      setDraftRow(initialDraftRow);
-      setSelectedFiles([]);
+      resetDraftRow();
       await fetchDoubts();
     } catch (submissionError) {
       setError(
         submissionError instanceof Error
           ? submissionError.message
-          : "Unable to add doubt",
+          : "Unable to save doubt",
       );
     } finally {
       setIsSubmitting(false);
@@ -352,6 +375,10 @@ export function DashboardClient() {
       return;
     }
 
+    if (editingId === item.id) {
+      resetDraftRow();
+    }
+
     await fetchDoubts();
   }
 
@@ -368,6 +395,11 @@ export function DashboardClient() {
               <p className="text-sm text-base-content/70">
                 Add one row per doubt. Fast capture, no extra clicks.
               </p>
+              {editingId ? (
+                <p className="mt-1 text-xs font-medium text-warning">
+                  Editing row. Save to update this doubt.
+                </p>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -622,8 +654,23 @@ export function DashboardClient() {
                     disabled={isSubmitting}
                     className="btn btn-primary btn-sm w-full"
                   >
-                    {isSubmitting ? "Adding..." : "Add Row"}
+                    {isSubmitting
+                      ? editingId
+                        ? "Saving..."
+                        : "Adding..."
+                      : editingId
+                        ? "Save Row"
+                        : "Add Row"}
                   </button>
+                  {editingId ? (
+                    <button
+                      type="button"
+                      onClick={resetDraftRow}
+                      className="btn btn-ghost btn-xs mt-1 w-full"
+                    >
+                      Cancel edit
+                    </button>
+                  ) : null}
                   <p className="mt-1 text-center text-[10px] text-base-content/60">
                     Cmd+Enter
                   </p>
@@ -736,6 +783,13 @@ export function DashboardClient() {
 
                     <td>
                       <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(item)}
+                          className="btn btn-outline btn-primary btn-xs"
+                        >
+                          Edit
+                        </button>
                         <Link href={`/doubts/${item.id}`} className="btn btn-outline btn-xs">
                           Open
                         </Link>
