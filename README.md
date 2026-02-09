@@ -13,7 +13,9 @@ Production-ready web app to capture, filter, search, and collaborate on doubts i
 
 ## Features
 
-- Invite-only login (no public signup)
+- Hero landing page at `/`
+- Email/password signup with name capture
+- Email/password login
 - Workspaces:
   - Personal room per user (private)
   - Shared rooms (owner + members)
@@ -56,10 +58,10 @@ Optional:
 - `supabase/migrations/0001_init.sql`
 - `supabase/migrations/0002_rooms.sql`
 
-5. Keep signup invite-only in Supabase Auth:
+5. Configure Supabase Auth based on your preference:
 
-- Supabase Dashboard -> Authentication -> Providers -> disable open signup.
-- Supabase Dashboard -> Authentication -> Users -> invite/add only approved users.
+- If you want public signup, keep email/password signup enabled.
+- If you want invite-only, disable open signup in Supabase Dashboard and pre-create users.
 
 6. Start dev server:
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
@@ -81,6 +82,13 @@ export function LoginForm() {
       >
         {isSubmitting ? "Signing in..." : "Sign in"}
       </button>
+
+      <p className="text-center text-sm text-base-content/70">
+        New here?{" "}
+        <Link href="/signup" className="link link-primary">
+          Create an account
+        </Link>
+      </p>
     </form>
   );
 }
