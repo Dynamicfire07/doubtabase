@@ -1,29 +1,30 @@
-# Doubts App (Production MVP)
+# Doubts App (Rooms Collaboration V1)
 
-Production-ready web app to capture, filter, search, and clear doubts with plain-text notes and image attachments.
+Production-ready web app to capture, filter, search, and collaborate on doubts in personal and shared workspaces.
 
 ## Stack
 
 - Next.js (App Router, TypeScript)
-- Supabase (Postgres + Auth + Storage)
-- Supabase RLS for per-user data isolation
+- Supabase (Postgres + Auth + Storage + Realtime)
+- Supabase RLS for room-scoped access control
 - Sentry for frontend/API error tracking
-- Tailwind CSS v4
-- daisyUI components
+- Tailwind CSS v4 + daisyUI
 - Vitest for unit tests
 
-## Features (v1)
+## Features
 
-- Email/password login
-- Doubt CRUD
-- Filters: `subject`, `subtopic`, `difficulty`, `error_tag`, `is_cleared`
-- Keyword search over title/body/subject/subtopics/error tags
-- Attachment uploads via presigned URLs (private storage bucket)
-- Signed short-lived download URLs for viewing attachments
-- Plain-text notes (no markdown renderer)
-- Cursor pagination
+- Invite-only login (no public signup)
+- Workspaces:
+  - Personal room per user (private)
+  - Shared rooms (owner + members)
+- Room invite codes (reusable until owner rotates)
+- Spreadsheet-like doubt entry and editing
+- Doubt CRUD + clear toggle + filters + keyword search
+- Owner-only deletes in shared rooms
+- Attachment uploads via presigned URLs (private bucket)
+- Realtime sync across members in open rooms
 - `/api/health` endpoint for uptime monitoring
-- Structured JSON logging for API actions/errors
+- Structured JSON logs for API actions/errors
 
 ## Local Setup
 
@@ -33,31 +34,32 @@ Production-ready web app to capture, filter, search, and clear doubts with plain
 npm install
 ```
 
-2. Copy environment file:
+2. Copy env file:
 
 ```bash
 cp .env.example .env.local
 ```
 
-3. Fill required vars in `.env.local`:
+3. Fill required env vars:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`)
+- `SUPABASE_SERVICE_ROLE_KEY` (required for secure room-join flow)
 
-Optional but recommended:
+Optional:
 
-- `SUPABASE_SERVICE_ROLE_KEY` (only needed for future admin-level operations)
 - `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN`
+- `SUPABASE_ATTACHMENTS_BUCKET` (defaults to `doubts-attachments`)
 
-4. Apply SQL migration in Supabase:
+4. Apply SQL migrations in Supabase SQL Editor, in order:
 
-- Run `supabase/migrations/0001_init.sql` in the Supabase SQL editor.
+- `supabase/migrations/0001_init.sql`
+- `supabase/migrations/0002_rooms.sql`
 
-5. Disable public signup in Supabase Auth:
+5. Keep signup invite-only in Supabase Auth:
 
 - Supabase Dashboard -> Authentication -> Providers -> disable open signup.
-- Supabase Dashboard -> Authentication -> Users -> invite/add only the people you approve.
-- Each user gets their own isolated doubts data via row-level security (`auth.uid() = user_id`).
+- Supabase Dashboard -> Authentication -> Users -> invite/add only approved users.
 
 6. Start dev server:
 
@@ -67,14 +69,24 @@ npm run dev
 
 ## API Surface
 
-- `POST /api/doubts`
-- `GET /api/doubts?q&subject&subtopic&difficulty&error_tag&is_cleared&cursor&limit`
+### Rooms
+
+- `GET /api/rooms`
+- `POST /api/rooms`
+- `POST /api/rooms/join`
+- `POST /api/rooms/:roomId/invite/rotate`
+- `GET /api/rooms/:roomId/members`
+
+### Doubts
+
+- `POST /api/doubts` (supports `room_id`; falls back to personal room if omitted)
+- `GET /api/doubts?room_id&q&subject&subtopic&difficulty&error_tag&is_cleared&cursor&limit`
 - `GET /api/doubts/:id`
 - `PATCH /api/doubts/:id`
-- `DELETE /api/doubts/:id`
+- `DELETE /api/doubts/:id` (owner-only in shared rooms)
 - `PATCH /api/doubts/:id/clear`
 - `POST /api/doubts/:id/attachments/presign`
-- `DELETE /api/attachments/:id`
+- `DELETE /api/attachments/:id` (owner-only in shared rooms)
 - `GET /api/health`
 
 ## Quality Commands
@@ -90,24 +102,31 @@ npm run build
 
 - Deploy app to Vercel
 - Configure production env vars in Vercel
+- Apply `0002_rooms.sql` before deploying app code
 - Ensure Supabase daily backups are enabled
-- Configure uptime monitor to hit `/api/health` every minute
+- Configure uptime monitor for `/api/health`
 - Connect Sentry DSN for client + server error tracking
-- Keep public signup disabled in Supabase Auth and invite only approved users
 
 ## Data Model
 
 Main tables:
 
+- `public.rooms`
+- `public.room_members`
+- `public.room_invites`
 - `public.doubts`
 - `public.doubt_attachments`
 
-Enum:
+Enums:
 
 - `public.difficulty_enum` (`easy`, `medium`, `hard`)
+- `public.room_role_enum` (`owner`, `member`)
 
 Storage bucket:
 
 - `doubts-attachments` (private)
 
-All schema, indexes, RLS, and storage policies are in `supabase/migrations/0001_init.sql`.
+All schema, indexes, RLS, and storage policies are in:
+
+- `supabase/migrations/0001_init.sql`
+- `supabase/migrations/0002_rooms.sql`

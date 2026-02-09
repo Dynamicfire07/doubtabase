@@ -7,6 +7,7 @@ import {
 describe("doubt validation", () => {
   it("accepts valid payload", () => {
     const parsed = createDoubtSchema.parse({
+      room_id: "11111111-1111-4111-8111-111111111111",
       title: "Why is my derivative wrong?",
       body_markdown: "I applied product rule but signs seem wrong.",
       subject: "Calculus",
@@ -51,6 +52,7 @@ describe("doubt validation", () => {
 
   it("parses query filters", () => {
     const params = new URLSearchParams({
+      room_id: "22222222-2222-4222-8222-222222222222",
       q: "product rule",
       subject: "Math",
       subtopic: "Derivatives",
@@ -63,6 +65,7 @@ describe("doubt validation", () => {
     const parsed = parseListDoubtsQuery(params);
 
     expect(parsed).toMatchObject({
+      room_id: "22222222-2222-4222-8222-222222222222",
       q: "product rule",
       subject: "Math",
       subtopic: "Derivatives",

@@ -2,7 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ZodError } from "zod";
 
 import { requireUserContext } from "@/lib/api/request-context";
+import { resolveDoubtRoomContext } from "@/lib/api/rooms";
 import {
+  badRequestResponse,
   internalErrorResponse,
   notFoundResponse,
   validationErrorResponse,
@@ -29,13 +31,23 @@ export async function GET(
   const { id } = await params;
 
   try {
+    const roomContext = await resolveDoubtRoomContext(supabase, user.id, id);
+
+    if (roomContext.error !== null) {
+      return notFoundResponse("Doubt not found");
+    }
+
+    const room = roomContext.room;
+    if (!room) {
+      return notFoundResponse("Doubt not found");
+    }
+
     const { data: doubt, error: doubtError } = await supabase
       .from("doubts")
       .select(
-        "id,title,body_markdown,subject,subtopics,difficulty,error_tags,is_cleared,created_at,updated_at",
+        "id,room_id,user_id,title,body_markdown,subject,subtopics,difficulty,error_tags,is_cleared,created_at,updated_at",
       )
       .eq("id", id)
-      .eq("user_id", user.id)
       .maybeSingle();
 
     if (doubtError) {
@@ -83,7 +95,21 @@ export async function GET(
     }));
 
     return NextResponse.json({
-      item: doubt,
+      item: {
+        id: doubt.id,
+        room_id: doubt.room_id,
+        created_by_user_id: doubt.user_id,
+        title: doubt.title,
+        body_markdown: doubt.body_markdown,
+        subject: doubt.subject,
+        subtopics: doubt.subtopics,
+        difficulty: doubt.difficulty,
+        error_tags: doubt.error_tags,
+        is_cleared: doubt.is_cleared,
+        created_at: doubt.created_at,
+        updated_at: doubt.updated_at,
+      },
+      room,
       attachments: serializedAttachments,
     });
   } catch (error) {
@@ -110,16 +136,31 @@ export async function PATCH(
   const { id } = await params;
 
   try {
+    const roomContext = await resolveDoubtRoomContext(supabase, user.id, id);
+    if (roomContext.error !== null) {
+      return notFoundResponse("Doubt not found");
+    }
+
+    const room = roomContext.room;
+    if (!room) {
+      return notFoundResponse("Doubt not found");
+    }
+
     const payload = updateDoubtSchema.parse(await request.json());
     const normalized = normalizeUpdateInput(payload);
+    const safeUpdate = { ...normalized };
+    delete safeUpdate.room_id;
+
+    if (Object.keys(safeUpdate).length === 0) {
+      return badRequestResponse("Provide at least one editable field to update");
+    }
 
     const { data, error } = await supabase
       .from("doubts")
-      .update(normalized)
+      .update(safeUpdate)
       .eq("id", id)
-      .eq("user_id", user.id)
       .select(
-        "id,title,body_markdown,subject,subtopics,difficulty,error_tags,is_cleared,created_at,updated_at",
+        "id,room_id,user_id,title,body_markdown,subject,subtopics,difficulty,error_tags,is_cleared,created_at,updated_at",
       )
       .maybeSingle();
 
@@ -133,10 +174,26 @@ export async function PATCH(
 
     logInfo("api.doubts.updated", {
       user_id: user.id,
+      room_id: room.id,
       doubt_id: id,
     });
 
-    return NextResponse.json({ item: data });
+    return NextResponse.json({
+      item: {
+        id: data.id,
+        room_id: data.room_id,
+        created_by_user_id: data.user_id,
+        title: data.title,
+        body_markdown: data.body_markdown,
+        subject: data.subject,
+        subtopics: data.subtopics,
+        difficulty: data.difficulty,
+        error_tags: data.error_tags,
+        is_cleared: data.is_cleared,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      },
+    });
   } catch (error) {
     if (error instanceof ZodError) {
       return validationErrorResponse(error);
@@ -165,19 +222,18 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    const { data: existing, error: existingError } = await supabase
-      .from("doubts")
-      .select("id")
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (existingError) {
-      throw existingError;
+    const roomContext = await resolveDoubtRoomContext(supabase, user.id, id);
+    if (roomContext.error !== null) {
+      return notFoundResponse("Doubt not found");
     }
 
-    if (!existing) {
+    const room = roomContext.room;
+    if (!room) {
       return notFoundResponse("Doubt not found");
+    }
+
+    if (room.role !== "owner") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { data: attachments, error: attachmentsError } = await supabase
@@ -202,8 +258,7 @@ export async function DELETE(
     const { error: deleteError } = await supabase
       .from("doubts")
       .delete()
-      .eq("id", id)
-      .eq("user_id", user.id);
+      .eq("id", id);
 
     if (deleteError) {
       throw deleteError;
@@ -211,6 +266,7 @@ export async function DELETE(
 
     logInfo("api.doubts.deleted", {
       user_id: user.id,
+      room_id: room.id,
       doubt_id: id,
     });
 

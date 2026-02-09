@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ZodError } from "zod";
 
 import { requireUserContext } from "@/lib/api/request-context";
+import { resolveRoomContext } from "@/lib/api/rooms";
 import {
   internalErrorResponse,
   validationErrorResponse,
@@ -27,13 +28,18 @@ export async function GET(request: NextRequest) {
 
   try {
     const query = parseListDoubtsQuery(new URL(request.url).searchParams);
+    const roomContext = await resolveRoomContext(supabase, user.id, query.room_id);
+
+    if (roomContext.error !== null) {
+      return NextResponse.json({ error: roomContext.error }, { status: 404 });
+    }
 
     let dbQuery = supabase
       .from("doubts")
       .select(
-        "id,title,body_markdown,subject,subtopics,difficulty,error_tags,is_cleared,created_at,updated_at",
+        "id,room_id,user_id,title,body_markdown,subject,subtopics,difficulty,error_tags,is_cleared,created_at,updated_at",
       )
-      .eq("user_id", user.id)
+      .eq("room_id", roomContext.room.id)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .limit(query.limit + 1);
@@ -93,7 +99,7 @@ export async function GET(request: NextRequest) {
       : supabase
           .from("doubts")
           .select("subject,subtopics,error_tags")
-          .eq("user_id", user.id)
+          .eq("room_id", roomContext.room.id)
           .order("updated_at", { ascending: false })
           .limit(80);
 
@@ -186,13 +192,26 @@ export async function GET(request: NextRequest) {
           .filter(Boolean),
       ),
     ).slice(0, 30);
+
     const serializedItems = items.map((item) => ({
-      ...item,
+      id: item.id,
+      room_id: item.room_id,
+      created_by_user_id: item.user_id,
+      title: item.title,
+      body_markdown: item.body_markdown,
+      subject: item.subject,
+      subtopics: item.subtopics,
+      difficulty: item.difficulty,
+      error_tags: item.error_tags,
+      is_cleared: item.is_cleared,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
       thumbnail_url_signed: thumbnailByDoubtId.get(item.id) ?? null,
     }));
 
     return NextResponse.json({
       items: serializedItems,
+      room: roomContext.room,
       next_cursor: nextCursor,
       suggestions: {
         subjects,
@@ -224,6 +243,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const payload = createDoubtSchema.parse(await request.json());
+    const roomContext = await resolveRoomContext(supabase, user.id, payload.room_id);
+
+    if (roomContext.error !== null) {
+      return NextResponse.json({ error: roomContext.error }, { status: 404 });
+    }
+
     const normalized = normalizeCreateInput(payload);
 
     const { data, error } = await supabase
@@ -231,9 +256,10 @@ export async function POST(request: NextRequest) {
       .insert({
         ...normalized,
         user_id: user.id,
+        room_id: roomContext.room.id,
       })
       .select(
-        "id,title,body_markdown,subject,subtopics,difficulty,error_tags,is_cleared,created_at,updated_at",
+        "id,room_id,user_id,title,body_markdown,subject,subtopics,difficulty,error_tags,is_cleared,created_at,updated_at",
       )
       .single();
 
@@ -243,10 +269,29 @@ export async function POST(request: NextRequest) {
 
     logInfo("api.doubts.created", {
       user_id: user.id,
+      room_id: roomContext.room.id,
       doubt_id: data.id,
     });
 
-    return NextResponse.json({ item: data }, { status: 201 });
+    return NextResponse.json(
+      {
+        item: {
+          id: data.id,
+          room_id: data.room_id,
+          created_by_user_id: data.user_id,
+          title: data.title,
+          body_markdown: data.body_markdown,
+          subject: data.subject,
+          subtopics: data.subtopics,
+          difficulty: data.difficulty,
+          error_tags: data.error_tags,
+          is_cleared: data.is_cleared,
+          created_at: data.created_at,
+          updated_at: data.updated_at,
+        },
+      },
+      { status: 201 },
+    );
   } catch (error) {
     if (error instanceof ZodError) {
       return validationErrorResponse(error);

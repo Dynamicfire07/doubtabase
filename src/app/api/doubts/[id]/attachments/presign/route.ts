@@ -5,6 +5,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ZodError } from "zod";
 
 import { requireUserContext } from "@/lib/api/request-context";
+import { resolveDoubtRoomContext } from "@/lib/api/rooms";
 import {
   badRequestResponse,
   internalErrorResponse,
@@ -53,22 +54,17 @@ export async function POST(
   const { id } = await params;
 
   try {
-    const payload = attachmentPresignSchema.parse(await request.json());
-
-    const { data: doubt, error: doubtError } = await supabase
-      .from("doubts")
-      .select("id")
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (doubtError) {
-      throw doubtError;
-    }
-
-    if (!doubt) {
+    const roomContext = await resolveDoubtRoomContext(supabase, user.id, id);
+    if (roomContext.error !== null) {
       return notFoundResponse("Doubt not found");
     }
+
+    const room = roomContext.room;
+    if (!room) {
+      return notFoundResponse("Doubt not found");
+    }
+
+    const payload = attachmentPresignSchema.parse(await request.json());
 
     const { count, error: countError } = await supabase
       .from("doubt_attachments")
@@ -86,7 +82,7 @@ export async function POST(
     }
 
     const extension = getExtension(payload.filename, payload.mime_type);
-    const objectPath = `doubts/${user.id}/${id}/${randomUUID()}${extension}`;
+    const objectPath = `rooms/${room.id}/doubts/${id}/${randomUUID()}${extension}`;
 
     const { data: signedUploadData, error: signError } = await supabase.storage
       .from(SUPABASE_ATTACHMENTS_BUCKET)
@@ -113,6 +109,7 @@ export async function POST(
 
     logInfo("api.attachments.presigned", {
       user_id: user.id,
+      room_id: room.id,
       doubt_id: id,
       attachment_id: attachment.id,
       storage_path: objectPath,

@@ -16,10 +16,12 @@ const tagSchema = z
 const titleSchema = z.string().trim().min(3).max(200);
 const bodySchema = z.string().trim().min(1).max(50_000);
 const subjectSchema = z.string().trim().min(1).max(120);
+const roomIdSchema = z.uuid();
 
 export const difficultySchema = z.enum(["easy", "medium", "hard"]);
 
 export const createDoubtSchema = z.object({
+  room_id: roomIdSchema.optional(),
   title: titleSchema,
   body_markdown: bodySchema,
   subject: subjectSchema,
@@ -46,6 +48,7 @@ export const attachmentPresignSchema = z.object({
 });
 
 export const listDoubtsQuerySchema = z.object({
+  room_id: roomIdSchema.optional(),
   q: z.string().trim().min(1).max(200).optional(),
   subject: z.string().trim().min(1).max(120).optional(),
   subtopic: z.string().trim().min(1).max(80).optional(),
@@ -60,6 +63,7 @@ export function parseListDoubtsQuery(searchParams: URLSearchParams) {
   const isClearedRaw = searchParams.get("is_cleared");
 
   return listDoubtsQuerySchema.parse({
+    room_id: searchParams.get("room_id") ?? undefined,
     q: searchParams.get("q") ?? undefined,
     subject: searchParams.get("subject") ?? undefined,
     subtopic: searchParams.get("subtopic") ?? undefined,

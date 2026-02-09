@@ -36,6 +36,30 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  await supabase.auth.getUser();
+  try {
+    await supabase.auth.getUser();
+  } catch (error) {
+    const code =
+      typeof error === "object" && error && "code" in error
+        ? String((error as { code?: unknown }).code ?? "")
+        : "";
+
+    if (code === "refresh_token_not_found") {
+      const staleCookies = request.cookies
+        .getAll()
+        .filter((cookie) => cookie.name.startsWith("sb-"))
+        .map((cookie) => cookie.name);
+
+      for (const name of staleCookies) {
+        request.cookies.delete(name);
+        response.cookies.delete(name);
+      }
+
+      return response;
+    }
+
+    throw error;
+  }
+
   return response;
 }
