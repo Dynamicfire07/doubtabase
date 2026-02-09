@@ -84,12 +84,18 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
 
           <div className="flex flex-wrap gap-2 text-xs">
             {data.item.subtopics.map((tag) => (
-              <span key={tag} className="badge badge-info badge-outline">
+              <span
+                key={tag}
+                className="badge badge-info badge-outline h-auto max-w-[220px] whitespace-normal break-words py-1 leading-tight"
+              >
                 {tag}
               </span>
             ))}
             {data.item.error_tags.map((tag) => (
-              <span key={tag} className="badge badge-error badge-outline">
+              <span
+                key={tag}
+                className="badge badge-error badge-outline h-auto max-w-[240px] whitespace-normal break-words py-1 leading-tight"
+              >
                 {tag}
               </span>
             ))}

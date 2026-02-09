@@ -682,7 +682,10 @@ export function DashboardClient() {
                           <span className="text-xs text-base-content/50">-</span>
                         ) : (
                           item.subtopics.slice(0, 4).map((tag) => (
-                            <span key={`${item.id}-sub-${tag}`} className="badge badge-info badge-outline badge-sm">
+                            <span
+                              key={`${item.id}-sub-${tag}`}
+                              className="badge badge-info badge-outline h-auto max-w-[170px] whitespace-normal break-words py-1 leading-tight"
+                            >
                               {tag}
                             </span>
                           ))
@@ -702,7 +705,10 @@ export function DashboardClient() {
                           <span className="text-xs text-base-content/50">-</span>
                         ) : (
                           item.error_tags.slice(0, 4).map((tag) => (
-                            <span key={`${item.id}-err-${tag}`} className="badge badge-error badge-outline badge-sm">
+                            <span
+                              key={`${item.id}-err-${tag}`}
+                              className="badge badge-error badge-outline h-auto max-w-[170px] whitespace-normal break-words py-1 leading-tight"
+                            >
                               {tag}
                             </span>
                           ))
