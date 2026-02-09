@@ -54,6 +54,15 @@ export type Attachment = {
   created_at: string;
 };
 
+export type DoubtComment = {
+  id: string;
+  doubt_id: string;
+  created_by_user_id: string;
+  body: string;
+  created_at: string;
+  is_current_user: boolean;
+};
+
 export type DoubtListResponse = {
   items: Doubt[];
   next_cursor: string | null;

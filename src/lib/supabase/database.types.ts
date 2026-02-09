@@ -98,6 +98,38 @@ export type Database = {
           },
         ];
       };
+      doubt_comments: {
+        Row: {
+          id: string;
+          doubt_id: string;
+          user_id: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          doubt_id: string;
+          user_id: string;
+          body: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          doubt_id?: string;
+          user_id?: string;
+          body?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "doubt_comments_doubt_id_fkey";
+            columns: ["doubt_id"];
+            isOneToOne: false;
+            referencedRelation: "doubts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       rooms: {
         Row: {
           id: string;

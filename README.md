@@ -25,6 +25,7 @@ Production-ready web app to capture, filter, search, and collaborate on doubts i
 - Owner-only deletes in shared rooms
 - Attachment uploads via presigned URLs (private bucket)
 - Realtime sync across members in open rooms
+- Room-scoped comments on doubt detail pages
 - `/api/health` endpoint for uptime monitoring
 - Structured JSON logs for API actions/errors
 
@@ -57,6 +58,7 @@ Optional:
 
 - `supabase/migrations/0001_init.sql`
 - `supabase/migrations/0002_rooms.sql`
+- `supabase/migrations/0003_doubt_comments.sql`
 
 5. Configure Supabase Auth based on your preference:
 
@@ -88,6 +90,7 @@ npm run dev
 - `DELETE /api/doubts/:id` (owner-only in shared rooms)
 - `PATCH /api/doubts/:id/clear`
 - `POST /api/doubts/:id/attachments/presign`
+- `POST /api/doubts/:id/comments`
 - `DELETE /api/attachments/:id` (owner-only in shared rooms)
 - `GET /api/health`
 
@@ -118,6 +121,7 @@ Main tables:
 - `public.room_invites`
 - `public.doubts`
 - `public.doubt_attachments`
+- `public.doubt_comments`
 
 Enums:
 
@@ -132,3 +136,4 @@ All schema, indexes, RLS, and storage policies are in:
 
 - `supabase/migrations/0001_init.sql`
 - `supabase/migrations/0002_rooms.sql`
+- `supabase/migrations/0003_doubt_comments.sql`

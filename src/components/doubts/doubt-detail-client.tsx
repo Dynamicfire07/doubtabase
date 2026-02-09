@@ -1,11 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useEffect, useCallback } from "react";
+import {
+  useMemo,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  type FormEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
-import type { Attachment, Doubt, RoomRole } from "@/types/domain";
+import type { Attachment, Doubt, DoubtComment, RoomRole } from "@/types/domain";
 
 type DoubtDetailResponse = {
   item: Doubt;
@@ -17,20 +24,56 @@ type DoubtDetailResponse = {
     role: RoomRole;
   };
   attachments: Attachment[];
+  comments: DoubtComment[];
 };
 
 type DoubtDetailClientProps = {
   doubtId: string;
 };
 
+async function parseError(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { error?: string };
+    return body.error ?? `Request failed with ${response.status}`;
+  } catch {
+    return `Request failed with ${response.status}`;
+  }
+}
+
+function formatCommentTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
+
+function formatCommentAuthor(comment: DoubtComment) {
+  if (comment.is_current_user) {
+    return "You";
+  }
+
+  return `${comment.created_by_user_id.slice(0, 8)}...${comment.created_by_user_id.slice(-4)}`;
+}
+
 export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const articleRef = useRef<HTMLElement | null>(null);
 
   const [data, setData] = useState<DoubtDetailResponse | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const response = await fetch(`/api/doubts/${doubtId}`, {
@@ -38,13 +81,14 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
     });
 
     if (!response.ok) {
-      setError("Unable to load doubt details.");
+      setPageError("Unable to load doubt details.");
       setIsLoading(false);
       return;
     }
 
     const payload = (await response.json()) as DoubtDetailResponse;
     setData(payload);
+    setPageError(null);
     setIsLoading(false);
   }, [doubtId]);
 
@@ -61,6 +105,18 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
   useEffect(() => {
     const channel = supabase
       .channel(`doubt-${doubtId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "doubt_comments",
+          filter: `doubt_id=eq.${doubtId}`,
+        },
+        () => {
+          void load();
+        },
+      )
       .on(
         "postgres_changes",
         {
@@ -92,10 +148,24 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
     };
   }, [doubtId, load, supabase]);
 
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, []);
+
   async function onDelete() {
     if (!data || data.room.role !== "owner") {
       return;
     }
+
+    setActionError(null);
 
     const shouldDelete = window.confirm(
       "Delete this doubt and all its attachments?",
@@ -112,7 +182,7 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
     });
 
     if (!response.ok) {
-      setError("Unable to delete this doubt.");
+      setActionError("Unable to delete this doubt.");
       setIsDeleting(false);
       return;
     }
@@ -121,24 +191,86 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
     router.refresh();
   }
 
+  async function onToggleFullscreen() {
+    if (!articleRef.current) {
+      return;
+    }
+
+    setActionError(null);
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        return;
+      }
+
+      await articleRef.current.requestFullscreen();
+    } catch {
+      setActionError("Unable to toggle full screen mode.");
+    }
+  }
+
+  async function onSubmitComment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const body = commentDraft.trim();
+    if (!body) {
+      return;
+    }
+
+    setIsCommentSubmitting(true);
+    setActionError(null);
+
+    const response = await fetch(`/api/doubts/${doubtId}/comments`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ body }),
+    });
+
+    if (!response.ok) {
+      setActionError(await parseError(response));
+      setIsCommentSubmitting(false);
+      return;
+    }
+
+    setCommentDraft("");
+    setIsCommentSubmitting(false);
+    await load();
+  }
+
   if (isLoading) {
     return <span className="loading loading-spinner loading-md text-primary" />;
   }
 
-  if (error || !data) {
+  if (pageError || !data) {
     return (
       <div role="alert" className="alert alert-error">
-        <span>{error ?? "Doubt not found."}</span>
+        <span>{pageError ?? "Doubt not found."}</span>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {actionError ? (
+        <div role="alert" className="alert alert-error">
+          <span>{actionError}</span>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2">
         <Link href={`/dashboard?room=${data.room.id}`} className="btn btn-sm btn-outline">
           Back to dashboard
         </Link>
+        <button
+          type="button"
+          onClick={() => void onToggleFullscreen()}
+          className="btn btn-sm btn-outline"
+        >
+          {isFullscreen ? "Exit full screen" : "Full screen"}
+        </button>
         {data.room.role === "owner" ? (
           <button
             type="button"
@@ -151,7 +283,10 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
         ) : null}
       </div>
 
-      <article className="card border border-base-300 bg-base-100 shadow-sm">
+      <article
+        ref={articleRef}
+        className="card border border-base-300 bg-base-100 shadow-sm"
+      >
         <div className="card-body">
           <header className="mb-6 space-y-3">
             <h1 className="text-2xl font-bold">{data.item.title}</h1>
@@ -215,13 +350,26 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
                     className="overflow-hidden rounded-box border border-base-300 bg-base-100"
                   >
                     {attachment.public_url_signed ? (
-                      // Signed URLs are generated at runtime; Next/Image remote patterns are not static here.
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={attachment.public_url_signed}
-                        alt="Doubt attachment"
-                        className="h-64 w-full object-cover"
-                      />
+                      <div>
+                        {/* Signed URLs are generated at runtime; Next/Image remote patterns are not static here. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={attachment.public_url_signed}
+                          alt="Doubt attachment"
+                          className="h-64 w-full object-cover"
+                        />
+                        <div className="flex justify-end border-t border-base-300 bg-base-100 p-2">
+                          <button
+                            type="button"
+                            className="btn btn-xs btn-primary"
+                            onClick={() =>
+                              setSelectedImageUrl(attachment.public_url_signed)
+                            }
+                          >
+                            View full image
+                          </button>
+                        </div>
+                      </div>
                     ) : (
                       <div className="flex h-64 items-center justify-center bg-base-200 text-sm text-base-content/60">
                         Attachment unavailable
@@ -232,8 +380,82 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
               </div>
             </section>
           ) : null}
+
+          <section className="mt-6 space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/70">
+              Comments
+            </h2>
+
+            <form onSubmit={onSubmitComment} className="space-y-2">
+              <textarea
+                value={commentDraft}
+                onChange={(event) => setCommentDraft(event.target.value)}
+                className="textarea textarea-bordered w-full"
+                rows={3}
+                placeholder="Add your comment for this doubt..."
+                maxLength={2000}
+              />
+              <div className="flex items-center justify-end">
+                <button
+                  type="submit"
+                  disabled={isCommentSubmitting || !commentDraft.trim()}
+                  className="btn btn-sm btn-primary"
+                >
+                  {isCommentSubmitting ? "Posting..." : "Post comment"}
+                </button>
+              </div>
+            </form>
+
+            {data.comments.length === 0 ? (
+              <div className="rounded-box border border-base-300 bg-base-200 p-3 text-sm text-base-content/70">
+                No comments yet. Start the discussion.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {data.comments.map((comment) => (
+                  <div
+                    key={comment.id}
+                    className="rounded-box border border-base-300 bg-base-200 p-3"
+                  >
+                    <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs text-base-content/70">
+                      <span className="font-semibold">{formatCommentAuthor(comment)}</span>
+                      <span>{formatCommentTime(comment.created_at)}</span>
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm">{comment.body}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       </article>
+
+      {selectedImageUrl ? (
+        <dialog className="modal modal-open">
+          <div className="modal-box h-auto max-h-[90vh] w-11/12 max-w-6xl p-3">
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                onClick={() => setSelectedImageUrl(null)}
+              >
+                Close
+              </button>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={selectedImageUrl}
+              alt="Full-size doubt attachment"
+              className="max-h-[78vh] w-full rounded-box object-contain"
+            />
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button type="button" onClick={() => setSelectedImageUrl(null)}>
+              close
+            </button>
+          </form>
+        </dialog>
+      ) : null}
     </div>
   );
 }

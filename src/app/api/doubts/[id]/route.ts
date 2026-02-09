@@ -68,6 +68,17 @@ export async function GET(
       throw attachmentsError;
     }
 
+    const { data: comments, error: commentsError } = await supabase
+      .from("doubt_comments")
+      .select("id,doubt_id,user_id,body,created_at")
+      .eq("doubt_id", id)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+
+    if (commentsError) {
+      throw commentsError;
+    }
+
     const signedMap = new Map<string, string | null>();
 
     if (attachments.length > 0) {
@@ -94,6 +105,15 @@ export async function GET(
       public_url_signed: signedMap.get(attachment.storage_path) ?? null,
     }));
 
+    const serializedComments = comments.map((comment) => ({
+      id: comment.id,
+      doubt_id: comment.doubt_id,
+      created_by_user_id: comment.user_id,
+      body: comment.body,
+      created_at: comment.created_at,
+      is_current_user: comment.user_id === user.id,
+    }));
+
     return NextResponse.json({
       item: {
         id: doubt.id,
@@ -111,6 +131,7 @@ export async function GET(
       },
       room,
       attachments: serializedAttachments,
+      comments: serializedComments,
     });
   } catch (error) {
     logError("api.doubts.get_failed", {
