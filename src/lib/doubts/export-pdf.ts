@@ -1,5 +1,7 @@
 import "server-only";
 
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import sharp from "sharp";
@@ -26,6 +28,12 @@ type BuildDoubtsPdfInput = {
 };
 
 type EmbeddedAttachment = {
+  width: number;
+  height: number;
+  imageBytes: Uint8Array;
+};
+
+type EmbeddedBrandLogo = {
   width: number;
   height: number;
   imageBytes: Uint8Array;
@@ -137,7 +145,13 @@ function drawPageFooter(
   bodyFont: import("pdf-lib").PDFFont,
   pageNumber: number,
   totalPages: number,
+  brandLogo?: {
+    image: import("pdf-lib").PDFImage;
+    width: number;
+    height: number;
+  },
 ) {
+  const brandText = "made with doubtabase | https://doubtabase.sbs/";
   const footerText = `Page ${pageNumber} of ${totalPages}`;
   const textWidth = bodyFont.widthOfTextAtSize(footerText, 9);
 
@@ -150,6 +164,26 @@ function drawPageFooter(
 
   page.drawText(footerText, {
     x: PAGE_WIDTH - PAGE_MARGIN - textWidth,
+    y: 16,
+    size: 9,
+    font: bodyFont,
+    color: rgb(0.36, 0.36, 0.36),
+  });
+
+  let brandX = PAGE_MARGIN;
+
+  if (brandLogo) {
+    page.drawImage(brandLogo.image, {
+      x: brandX,
+      y: 14,
+      width: brandLogo.width,
+      height: brandLogo.height,
+    });
+    brandX += brandLogo.width + 6;
+  }
+
+  page.drawText(brandText, {
+    x: brandX,
     y: 16,
     size: 9,
     font: bodyFont,
@@ -212,6 +246,30 @@ async function loadAttachmentImage(
   } satisfies EmbeddedAttachment;
 }
 
+async function loadBrandLogoImage() {
+  try {
+    const logoPath = path.join(process.cwd(), "public", "brand-icon.svg");
+    const svgBuffer = await readFile(logoPath);
+    const pngBuffer = await sharp(svgBuffer)
+      .resize(120, 120, { fit: "inside" })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+    const metadata = await sharp(pngBuffer).metadata();
+
+    if (!metadata.width || !metadata.height) {
+      return null;
+    }
+
+    return {
+      width: metadata.width,
+      height: metadata.height,
+      imageBytes: new Uint8Array(pngBuffer),
+    } satisfies EmbeddedBrandLogo;
+  } catch {
+    return null;
+  }
+}
+
 export async function buildDoubtsExportPdf(
   input: BuildDoubtsPdfInput,
 ): Promise<Uint8Array> {
@@ -219,6 +277,10 @@ export async function buildDoubtsExportPdf(
   const titleFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const bodyFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const italicFont = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+  const brandLogoBytes = await loadBrandLogoImage();
+  const embeddedBrandLogo = brandLogoBytes
+    ? await pdfDoc.embedPng(brandLogoBytes.imageBytes)
+    : null;
 
   const imageCache = new Map<string, Promise<EmbeddedAttachment | null>>();
 
@@ -236,6 +298,22 @@ export async function buildDoubtsExportPdf(
   drawWatermark(cover, titleFont);
 
   let coverY = PAGE_HEIGHT - PAGE_MARGIN;
+
+  if (embeddedBrandLogo && brandLogoBytes) {
+    const scaledLogo = scaleToFit(
+      brandLogoBytes.width,
+      brandLogoBytes.height,
+      56,
+      56,
+    );
+    cover.drawImage(embeddedBrandLogo, {
+      x: PAGE_WIDTH - PAGE_MARGIN - scaledLogo.width,
+      y: PAGE_HEIGHT - PAGE_MARGIN - scaledLogo.height + 4,
+      width: scaledLogo.width,
+      height: scaledLogo.height,
+    });
+  }
+
   cover.drawText("Doubts PDF Export", {
     x: PAGE_MARGIN,
     y: coverY,
@@ -427,7 +505,18 @@ export async function buildDoubtsExportPdf(
 
   const pages = pdfDoc.getPages();
   for (let index = 0; index < pages.length; index += 1) {
-    drawPageFooter(pages[index], bodyFont, index + 1, pages.length);
+    drawPageFooter(
+      pages[index],
+      bodyFont,
+      index + 1,
+      pages.length,
+      embeddedBrandLogo && brandLogoBytes
+        ? {
+            image: embeddedBrandLogo,
+            ...scaleToFit(brandLogoBytes.width, brandLogoBytes.height, 10, 10),
+          }
+        : undefined,
+    );
   }
 
   return pdfDoc.save();

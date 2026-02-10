@@ -38,6 +38,7 @@ export default function RootLayout({
       >
         <div className="flex-1">{children}</div>
         <footer className="border-t border-base-300 bg-base-100/80 px-6 py-4 text-center text-sm text-base-content/70">
+          <span className="mr-2">Made by Shaurya Jain |</span>
           <a
             href="https://doubtabase.sbs/"
             target="_blank"
