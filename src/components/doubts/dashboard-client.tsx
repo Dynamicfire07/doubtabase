@@ -260,12 +260,16 @@ function parseFilenameFromContentDisposition(value: string | null) {
 }
 
 function formatUserLabel(member: RoomMember) {
-  const shortId = `${member.user_id.slice(0, 8)}...${member.user_id.slice(-4)}`;
+  const fullName =
+    typeof member.name === "string" && member.name.trim()
+      ? member.name.trim()
+      : null;
+
   if (member.is_current_user) {
     return `You (${member.role})`;
   }
 
-  return `${shortId} (${member.role})`;
+  return `${fullName ?? "Member"} (${member.role})`;
 }
 
 function matchesAppliedFilters(item: Doubt, filters: FilterDraft) {
@@ -1877,7 +1881,7 @@ export function DashboardClient() {
                     multiple
                     accept="image/jpeg,image/png,image/webp"
                     onChange={onFileChange}
-                    className="file-input file-input-bordered file-input-sm w-full"
+                    className="file-input file-input-bordered file-input-sm w-full file:text-center"
                   />
                   {selectedFiles.length > 0 ? (
                     <p className="mt-1 text-xs text-base-content/70">

@@ -23,6 +23,7 @@ export type RoomInvite = {
 
 export type RoomMember = {
   user_id: string;
+  name: string | null;
   role: RoomRole;
   created_at: string;
   is_current_user: boolean;
