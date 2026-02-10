@@ -52,6 +52,24 @@ type DoubtMetaResponse = {
   suggestions: DoubtListResponse["suggestions"];
 };
 
+type ExportMode = "all" | "manual" | "filter";
+
+type ExportCandidate = {
+  id: string;
+  title: string;
+  subject: string;
+  difficulty: Difficulty;
+  is_cleared: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type ExportCandidatesResponse = {
+  total: number;
+  truncated: boolean;
+  items: ExportCandidate[];
+};
+
 type LoadOptions = {
   fresh?: boolean;
 };
@@ -219,6 +237,28 @@ async function parseError(response: Response): Promise<string> {
   }
 }
 
+function parseFilenameFromContentDisposition(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const utfMatch = value.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utfMatch && utfMatch[1]) {
+    try {
+      return decodeURIComponent(utfMatch[1].replace(/["']/g, ""));
+    } catch {
+      return utfMatch[1].replace(/["']/g, "");
+    }
+  }
+
+  const asciiMatch = value.match(/filename=\"?([^\";]+)\"?/i);
+  if (asciiMatch && asciiMatch[1]) {
+    return asciiMatch[1];
+  }
+
+  return null;
+}
+
 function formatUserLabel(member: RoomMember) {
   const shortId = `${member.user_id.slice(0, 8)}...${member.user_id.slice(-4)}`;
   if (member.is_current_user) {
@@ -360,6 +400,19 @@ export function DashboardClient() {
   const [thumbnailStateById, setThumbnailStateById] = useState<
     Record<string, ThumbnailLoadState>
   >({});
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isExportCandidatesLoading, setIsExportCandidatesLoading] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [exportMode, setExportMode] = useState<ExportMode>("all");
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportCandidates, setExportCandidates] = useState<ExportCandidate[]>([]);
+  const [exportCandidatesTotal, setExportCandidatesTotal] = useState(0);
+  const [exportCandidatesTruncated, setExportCandidatesTruncated] = useState(false);
+  const [manualSelectedIds, setManualSelectedIds] = useState<string[]>([]);
+  const [manualSearch, setManualSearch] = useState("");
+  const [exportFilterDraft, setExportFilterDraft] = useState<FilterDraft>(
+    initialFilterDraft,
+  );
 
   const selectedRoom = useMemo(
     () => rooms.find((room) => room.id === selectedRoomId) ?? null,
@@ -371,6 +424,55 @@ export function DashboardClient() {
   );
 
   const canDelete = selectedRoom?.role === "owner";
+  const manualSelectedSet = useMemo(
+    () => new Set(manualSelectedIds),
+    [manualSelectedIds],
+  );
+  const manualFilteredCandidates = useMemo(() => {
+    const search = manualSearch.trim().toLowerCase();
+    if (!search) {
+      return exportCandidates;
+    }
+
+    return exportCandidates.filter((item) =>
+      [item.title, item.subject, item.difficulty, item.is_cleared ? "cleared" : "open"]
+        .join(" ")
+        .toLowerCase()
+        .includes(search),
+    );
+  }, [exportCandidates, manualSearch]);
+  const exportSubjectSuggestions = useMemo(
+    () =>
+      Array.from(
+        new Set(exportCandidates.map((item) => item.subject.trim()).filter(Boolean)),
+      ).sort((a, b) => a.localeCompare(b)),
+    [exportCandidates],
+  );
+  const exportFilterMatchCount = useMemo(() => {
+    const query = exportFilterDraft.q.trim().toLowerCase();
+    const subject = exportFilterDraft.subject.trim().toLowerCase();
+
+    return exportCandidates.filter((item) => {
+      if (subject && item.subject.trim().toLowerCase() !== subject) {
+        return false;
+      }
+
+      if (exportFilterDraft.is_cleared === "true" && !item.is_cleared) {
+        return false;
+      }
+
+      if (exportFilterDraft.is_cleared === "false" && item.is_cleared) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      const haystack = [item.title, item.subject].join(" ").toLowerCase();
+      return haystack.includes(query);
+    }).length;
+  }, [exportCandidates, exportFilterDraft]);
 
   const markRowSyncing = useCallback((id: string) => {
     setSyncingIds((current) => (current.includes(id) ? current : [...current, id]));
@@ -980,6 +1082,20 @@ export function DashboardClient() {
     setInviteData(null);
   }, [selectedRoomId]);
 
+  useEffect(() => {
+    setIsExportModalOpen(false);
+    setIsExportCandidatesLoading(false);
+    setIsExportingPdf(false);
+    setExportMode("all");
+    setExportError(null);
+    setExportCandidates([]);
+    setExportCandidatesTotal(0);
+    setExportCandidatesTruncated(false);
+    setManualSelectedIds([]);
+    setManualSearch("");
+    setExportFilterDraft(initialFilterDraft);
+  }, [selectedRoomId]);
+
   async function onSignOut() {
     await supabase.auth.signOut();
     router.replace("/login");
@@ -1410,6 +1526,159 @@ export function DashboardClient() {
     }
   }
 
+  async function loadExportCandidates(roomId: string) {
+    setIsExportCandidatesLoading(true);
+    setExportError(null);
+
+    try {
+      const response = await fetch(`/api/doubts/export?room_id=${roomId}`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseError(response));
+      }
+
+      const data = (await response.json()) as ExportCandidatesResponse;
+      setExportCandidates(data.items);
+      setExportCandidatesTotal(data.total);
+      setExportCandidatesTruncated(data.truncated);
+      setManualSelectedIds(data.items.map((item) => item.id));
+    } catch (requestError) {
+      setExportError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load export options.",
+      );
+      setExportCandidates([]);
+      setExportCandidatesTotal(0);
+      setExportCandidatesTruncated(false);
+      setManualSelectedIds([]);
+    } finally {
+      setIsExportCandidatesLoading(false);
+    }
+  }
+
+  async function onOpenExportModal() {
+    if (!selectedRoomId) {
+      setError("Select a room first.");
+      return;
+    }
+
+    setIsExportModalOpen(true);
+    setExportError(null);
+    setManualSearch("");
+    setExportMode("all");
+    setExportFilterDraft(appliedFilters);
+    await loadExportCandidates(selectedRoomId);
+  }
+
+  function onCloseExportModal() {
+    if (isExportingPdf) {
+      return;
+    }
+
+    setIsExportModalOpen(false);
+    setExportError(null);
+  }
+
+  function onToggleManualSelection(doubtId: string) {
+    setManualSelectedIds((current) =>
+      current.includes(doubtId)
+        ? current.filter((value) => value !== doubtId)
+        : [...current, doubtId],
+    );
+  }
+
+  function onSelectAllManual() {
+    setManualSelectedIds(exportCandidates.map((item) => item.id));
+  }
+
+  function onSelectVisibleManual() {
+    const visibleIds = manualFilteredCandidates.map((item) => item.id);
+    setManualSelectedIds((current) => {
+      const next = new Set(current);
+      for (const id of visibleIds) {
+        next.add(id);
+      }
+      return Array.from(next);
+    });
+  }
+
+  function onClearManualSelection() {
+    setManualSelectedIds([]);
+  }
+
+  async function onExportPdf() {
+    if (!selectedRoomId) {
+      setExportError("Select a room first.");
+      return;
+    }
+
+    if (exportMode === "manual" && manualSelectedIds.length === 0) {
+      setExportError("Select at least one doubt for manual export.");
+      return;
+    }
+
+    setIsExportingPdf(true);
+    setExportError(null);
+
+    try {
+      const payload: {
+        room_id: string;
+        mode: ExportMode;
+        ids?: string[];
+        filters?: FilterDraft;
+      } = {
+        room_id: selectedRoomId,
+        mode: exportMode,
+      };
+
+      if (exportMode === "manual") {
+        payload.ids = manualSelectedIds;
+      } else if (exportMode === "filter") {
+        payload.filters = exportFilterDraft;
+      }
+
+      const response = await fetch("/api/doubts/export/pdf", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseError(response));
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      const filename =
+        parseFilenameFromContentDisposition(
+          response.headers.get("content-disposition"),
+        ) ?? `doubts-export-${new Date().toISOString().slice(0, 10)}.pdf`;
+
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 2500);
+
+      setIsExportModalOpen(false);
+    } catch (requestError) {
+      setExportError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to export doubts as PDF.",
+      );
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }
+
   const openCount = doubts.filter((item) => !item.is_cleared).length;
   const clearedCount = doubts.length - openCount;
 
@@ -1724,6 +1993,15 @@ export function DashboardClient() {
                   className="btn btn-sm btn-ghost"
                 >
                   Reset
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void onOpenExportModal()}
+                  disabled={!selectedRoomId}
+                  className="btn btn-sm btn-secondary"
+                >
+                  Export PDF
                 </button>
               </div>
             </div>
@@ -2130,6 +2408,277 @@ export function DashboardClient() {
           </section>
         </aside>
       </div>
+
+      {isExportModalOpen ? (
+        <dialog className="modal modal-open">
+          <div className="modal-box w-11/12 max-w-5xl">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold">Export doubts to PDF</h3>
+              <button
+                type="button"
+                onClick={onCloseExportModal}
+                className="btn btn-sm btn-ghost"
+                disabled={isExportingPdf}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {exportError ? (
+                <div role="alert" className="alert alert-error">
+                  <span>{exportError}</span>
+                </div>
+              ) : null}
+
+              <div className="rounded-lg border border-base-300 bg-base-200/40 p-3 text-sm">
+                <p>
+                  Room: <span className="font-semibold">{selectedRoom?.name ?? "-"}</span>
+                </p>
+                <p className="text-base-content/70">
+                  Loaded doubts for export options: {exportCandidatesTotal}
+                  {exportCandidatesTruncated ? " (showing first 5000)" : ""}
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="cursor-pointer rounded-lg border border-base-300 bg-base-100 p-3">
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="radio"
+                      name="export-mode"
+                      className="radio radio-sm mt-0.5"
+                      checked={exportMode === "all"}
+                      onChange={() => setExportMode("all")}
+                    />
+                    <div>
+                      <p className="font-medium">Everything</p>
+                      <p className="text-xs text-base-content/70">
+                        Export every doubt in this room.
+                      </p>
+                    </div>
+                  </div>
+                </label>
+
+                <label className="cursor-pointer rounded-lg border border-base-300 bg-base-100 p-3">
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="radio"
+                      name="export-mode"
+                      className="radio radio-sm mt-0.5"
+                      checked={exportMode === "manual"}
+                      onChange={() => setExportMode("manual")}
+                    />
+                    <div>
+                      <p className="font-medium">Manual selection</p>
+                      <p className="text-xs text-base-content/70">
+                        Pick exactly which doubts to include.
+                      </p>
+                    </div>
+                  </div>
+                </label>
+
+                <label className="cursor-pointer rounded-lg border border-base-300 bg-base-100 p-3">
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="radio"
+                      name="export-mode"
+                      className="radio radio-sm mt-0.5"
+                      checked={exportMode === "filter"}
+                      onChange={() => setExportMode("filter")}
+                    />
+                    <div>
+                      <p className="font-medium">Filter logic</p>
+                      <p className="text-xs text-base-content/70">
+                        Apply search, subject, and status filters for export.
+                      </p>
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              {isExportCandidatesLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={`export-candidate-skeleton-${index}`} className="skeleton h-9 w-full" />
+                  ))}
+                </div>
+              ) : null}
+
+              {!isExportCandidatesLoading && exportMode === "manual" ? (
+                <div className="space-y-3 rounded-lg border border-base-300 bg-base-100 p-3">
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="min-w-[220px] flex-1">
+                      <label className="label pb-1">
+                        <span className="label-text text-xs">Search in list</span>
+                      </label>
+                      <input
+                        value={manualSearch}
+                        onChange={(event) => setManualSearch(event.target.value)}
+                        className="input input-bordered input-sm w-full"
+                        placeholder="Title / subject / status"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={onSelectAllManual}
+                      className="btn btn-sm btn-outline"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onSelectVisibleManual}
+                      className="btn btn-sm btn-outline"
+                    >
+                      Select visible
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onClearManualSelection}
+                      className="btn btn-sm btn-ghost"
+                    >
+                      Clear
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-base-content/70">
+                    Selected: {manualSelectedIds.length} / {exportCandidates.length}
+                  </p>
+
+                  <div className="max-h-80 space-y-2 overflow-y-auto rounded-md border border-base-300 bg-base-200/40 p-2">
+                    {manualFilteredCandidates.length === 0 ? (
+                      <p className="p-2 text-sm text-base-content/70">
+                        No doubts match this search.
+                      </p>
+                    ) : (
+                      manualFilteredCandidates.map((item) => (
+                        <label
+                          key={item.id}
+                          className="flex cursor-pointer items-start gap-3 rounded-md border border-base-300 bg-base-100 p-2"
+                        >
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-sm mt-0.5"
+                            checked={manualSelectedSet.has(item.id)}
+                            onChange={() => onToggleManualSelection(item.id)}
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{item.title}</p>
+                            <p className="text-xs text-base-content/70">
+                              {item.subject} | {item.difficulty} |{" "}
+                              {item.is_cleared ? "Cleared" : "Open"} | {formatDate(item.updated_at)}
+                            </p>
+                          </div>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              {!isExportCandidatesLoading && exportMode === "filter" ? (
+                <div className="space-y-3 rounded-lg border border-base-300 bg-base-100 p-3">
+                  <div className="grid gap-2 md:grid-cols-3">
+                    <div>
+                      <label className="label pb-1">
+                        <span className="label-text text-xs">Search</span>
+                      </label>
+                      <input
+                        value={exportFilterDraft.q}
+                        onChange={(event) =>
+                          setExportFilterDraft((current) => ({
+                            ...current,
+                            q: event.target.value,
+                          }))
+                        }
+                        className="input input-bordered input-sm w-full"
+                        placeholder="Title / notes / tags"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="label pb-1">
+                        <span className="label-text text-xs">Subject</span>
+                      </label>
+                      <input
+                        value={exportFilterDraft.subject}
+                        onChange={(event) =>
+                          setExportFilterDraft((current) => ({
+                            ...current,
+                            subject: event.target.value,
+                          }))
+                        }
+                        list="export-subject-suggestions"
+                        className="input input-bordered input-sm w-full"
+                        placeholder="Any subject"
+                      />
+                      <datalist id="export-subject-suggestions">
+                        {exportSubjectSuggestions.map((subject) => (
+                          <option key={`export-subject-${subject}`} value={subject} />
+                        ))}
+                      </datalist>
+                    </div>
+
+                    <div>
+                      <label className="label pb-1">
+                        <span className="label-text text-xs">Status</span>
+                      </label>
+                      <select
+                        value={exportFilterDraft.is_cleared}
+                        onChange={(event) =>
+                          setExportFilterDraft((current) => ({
+                            ...current,
+                            is_cleared: event.target.value as FilterDraft["is_cleared"],
+                          }))
+                        }
+                        className="select select-bordered select-sm w-full"
+                      >
+                        <option value="">All</option>
+                        <option value="false">Open</option>
+                        <option value="true">Cleared</option>
+                      </select>
+                    </div>
+                  </div>
+                  <p className="text-xs text-base-content/70">
+                    Approx matches from loaded list: {exportFilterMatchCount}
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={onCloseExportModal}
+                  className="btn btn-sm btn-ghost"
+                  disabled={isExportingPdf}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onExportPdf()}
+                  disabled={
+                    isExportingPdf ||
+                    isExportCandidatesLoading ||
+                    (exportMode === "manual" && manualSelectedIds.length === 0)
+                  }
+                  className="btn btn-sm btn-primary"
+                >
+                  {isExportingPdf ? "Exporting..." : "Download PDF"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <form method="dialog" className="modal-backdrop">
+            <button type="button" onClick={onCloseExportModal}>
+              close
+            </button>
+          </form>
+        </dialog>
+      ) : null}
     </div>
   );
 }
