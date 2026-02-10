@@ -151,7 +151,7 @@ function drawPageFooter(
     height: number;
   },
 ) {
-  const brandText = "made with doubtabase | https://doubtabase.sbs/";
+  const brandText = "Made with Doubtabase | https://doubtabase.sbs/";
   const footerText = `Page ${pageNumber} of ${totalPages}`;
   const textWidth = bodyFont.widthOfTextAtSize(footerText, 9);
 

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Image from "next/image";
 import { Analytics } from "@vercel/analytics/next";
 
 import "./globals.css";
@@ -38,23 +37,7 @@ export default function RootLayout({
       >
         <div className="flex-1">{children}</div>
         <footer className="border-t border-base-300 bg-base-100/80 px-6 py-4 text-center text-sm text-base-content/70">
-          <span className="mr-2">Made by Shaurya Jain |</span>
-          <a
-            href="https://doubtabase.sbs/"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 font-medium text-primary hover:underline"
-          >
-            <span className="text-base-content/70">made with</span>
-            <Image
-              src="/brand-icon.svg"
-              alt="doubtabase logo"
-              width={16}
-              height={16}
-              className="rounded-sm"
-            />
-            doubtabase
-          </a>
+          Made by Shaurya Jain
         </footer>
         <Analytics />
       </body>
