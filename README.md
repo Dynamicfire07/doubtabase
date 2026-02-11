@@ -16,6 +16,7 @@ Production-ready web app to capture, filter, search, and collaborate on doubts i
 - Hero landing page at `/`
 - Email/password signup with name capture
 - Email/password login
+- Google OAuth login (optional)
 - Workspaces:
   - Personal room per user (private)
   - Shared rooms (owner + members)
@@ -66,6 +67,7 @@ Optional:
 
 - If you want public signup, keep email/password signup enabled.
 - If you want invite-only, disable open signup in Supabase Dashboard and pre-create users.
+- If you enable Google OAuth, add `http://localhost:3000/auth/callback` and your production callback URL (for example `https://doubtabase.sbs/auth/callback`) to Supabase Auth redirect URLs.
 
 6. Start dev server:
 
