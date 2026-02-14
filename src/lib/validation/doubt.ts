@@ -67,7 +67,7 @@ export const listDoubtsQuerySchema = z.object({
 });
 
 export const ingestDoubtSchema = z.object({
-  message_base64: z.string().trim().min(1).max(200_000).optional(),
+  notes: bodySchema.optional(),
   title: titleSchema.optional(),
   subject: subjectSchema.optional(),
   subtopics: z.array(tagSchema).max(20).optional(),
@@ -76,9 +76,9 @@ export const ingestDoubtSchema = z.object({
   is_cleared: z.boolean().optional(),
   endpoints: z.array(ingestEndpointSchema).max(50).optional(),
   attachments: z.array(ingestAttachmentSchema).max(MAX_ATTACHMENTS_PER_DOUBT).optional(),
-}).refine((value) => Boolean(value.message_base64 ?? value.attachments?.length), {
-  message: "Provide message_base64 or at least one attachment",
-  path: ["message_base64"],
+}).refine((value) => Boolean(value.notes ?? value.attachments?.length), {
+  message: "Provide notes or at least one attachment",
+  path: ["notes"],
 });
 
 export function parseListDoubtsQuery(searchParams: URLSearchParams) {

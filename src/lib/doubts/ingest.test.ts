@@ -1,17 +1,9 @@
-import {
-  createDoubtInputFromIngest,
-  decodeBase64Bytes,
-  decodeBase64Message,
-} from "@/lib/doubts/ingest";
-
-function toBase64(value: string) {
-  return Buffer.from(value, "utf-8").toString("base64");
-}
+import { createDoubtInputFromIngest, decodeBase64Bytes } from "@/lib/doubts/ingest";
 
 describe("doubt ingest helpers", () => {
-  it("builds a create payload from plain base64 text", () => {
+  it("builds a create payload from notes text", () => {
     const payload = createDoubtInputFromIngest({
-      message_base64: toBase64("Need help with trigonometry identities"),
+      notes: "Need help with trigonometry identities",
       endpoints: [
         " https://api.example.com/v1/messages ",
         "https://api.example.com/v1/messages",
@@ -29,43 +21,9 @@ describe("doubt ingest helpers", () => {
     expect(payload.is_cleared).toBe(false);
   });
 
-  it("extracts metadata when decoded payload is JSON", () => {
-    const encoded = toBase64(
-      JSON.stringify({
-        title: "Webhook failure in worker",
-        subject: "Backend",
-        difficulty: "hard",
-        subtopics: ["Queues", "Workers"],
-        error_tags: ["Timeout"],
-        message: "Worker retries keep failing after 60s.",
-      }),
-    );
-
+  it("uses explicit metadata fields", () => {
     const payload = createDoubtInputFromIngest({
-      message_base64: encoded,
-    });
-
-    expect(payload.title).toBe("Webhook failure in worker");
-    expect(payload.subject).toBe("Backend");
-    expect(payload.difficulty).toBe("hard");
-    expect(payload.subtopics).toEqual(["Queues", "Workers"]);
-    expect(payload.error_tags).toEqual(["Timeout"]);
-    expect(payload.body_markdown).toBe("Worker retries keep failing after 60s.");
-  });
-
-  it("prefers explicit request fields over decoded JSON metadata", () => {
-    const encoded = toBase64(
-      JSON.stringify({
-        title: "Old title",
-        subject: "Old subject",
-        difficulty: "hard",
-        message: "Original body",
-        endpoints: ["https://old.example.com"],
-      }),
-    );
-
-    const payload = createDoubtInputFromIngest({
-      message_base64: encoded,
+      notes: "Original body",
       title: "New title",
       subject: "New subject",
       difficulty: "easy",
@@ -85,20 +43,7 @@ describe("doubt ingest helpers", () => {
     expect(payload.is_cleared).toBe(true);
   });
 
-  it("decodes base64 data URLs", () => {
-    const decoded = decodeBase64Message("data:text/plain;base64,SGVsbG8=");
-    expect(decoded).toBe("Hello");
-  });
-
-  it("throws on invalid base64", () => {
-    expect(() =>
-      createDoubtInputFromIngest({
-        message_base64: "***not-base64***",
-      }),
-    ).toThrow("Invalid base64 message");
-  });
-
-  it("creates default body when no message is provided", () => {
+  it("creates default body when only attachments are provided", () => {
     const payload = createDoubtInputFromIngest({
       attachments: [
         {
@@ -116,5 +61,11 @@ describe("doubt ingest helpers", () => {
   it("decodes base64 bytes for attachments", () => {
     const bytes = decodeBase64Bytes("data:image/png;base64,SGVsbG8=");
     expect(bytes.toString("utf-8")).toBe("Hello");
+  });
+
+  it("throws on invalid base64 payload", () => {
+    expect(() => decodeBase64Bytes("***not-base64***")).toThrow(
+      "Invalid base64 payload",
+    );
   });
 });

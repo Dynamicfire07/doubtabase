@@ -219,7 +219,7 @@ async function rollbackIngestCreate(
 
 function isUserPayloadError(error: Error) {
   return (
-    error.message === "Invalid base64 message" ||
+    error.message === "Invalid base64 payload" ||
     error.message.startsWith("Invalid base64 attachment at index ") ||
     error.message.includes("Attachment at index ") ||
     error.message.includes("max size")

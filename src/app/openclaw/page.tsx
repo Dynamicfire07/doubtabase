@@ -38,7 +38,6 @@ const rotateIngestKeyResponseExample = `{
 }`;
 
 const ingestRequestExample = `INGEST_KEY="<paste-ingest-key>"
-MESSAGE_B64=$(printf '%s' 'Need help with this topic' | base64 | tr -d '\\n')
 IMAGE_B64=$(base64 < screenshot.png | tr -d '\\n')
 
 curl 'https://doubtabase.sbs/api/doubts/ingest' \\
@@ -46,7 +45,7 @@ curl 'https://doubtabase.sbs/api/doubts/ingest' \\
   -H 'content-type: application/json' \\
   -H "x-ingest-key: $INGEST_KEY" \\
   --data-raw '{
-    "message_base64": "'"$MESSAGE_B64"'",
+    "notes": "Need help with this topic",
     "title": "Auto doubt from OpenClaw",
     "subject": "Math",
     "subtopics": ["Algebra"],
@@ -208,8 +207,8 @@ export default function OpenClawDocsPage() {
           </div>
 
           <p className="mt-4 text-sm text-base-content/80">
-            Send <code>message_base64</code> and/or <code>attachments</code>. Each
-            attachment is base64 image payload and is stored automatically.
+            Send plain-text <code>notes</code> and/or <code>attachments</code>. Each
+            attachment is a base64 image payload and is stored automatically.
           </p>
 
           <h3 className="mt-6 text-sm font-semibold uppercase tracking-[0.2em] text-base-content/60">
@@ -243,11 +242,11 @@ export default function OpenClawDocsPage() {
               <tbody>
                 <tr>
                   <td>
-                    <code>message_base64</code>
+                    <code>notes</code>
                   </td>
                   <td>string</td>
                   <td>No*</td>
-                  <td>Base64 payload. Decoded into notes/body_markdown.</td>
+                  <td>Mapped directly to body_markdown.</td>
                 </tr>
                 <tr>
                   <td>
@@ -317,7 +316,7 @@ export default function OpenClawDocsPage() {
             </table>
           </div>
           <p className="mt-3 text-xs text-base-content/60">
-            * At least one of <code>message_base64</code> or <code>attachments</code> is required.
+            * At least one of <code>notes</code> or <code>attachments</code> is required.
           </p>
         </div>
 

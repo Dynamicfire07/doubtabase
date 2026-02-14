@@ -53,7 +53,7 @@ describe("doubt validation", () => {
 
   it("parses ingest payload with optional fields", () => {
     const parsed = ingestDoubtSchema.parse({
-      message_base64: "SGVsbG8=",
+      notes: "Webhook ping body",
       title: "Webhook ping",
       subject: "APIs",
       subtopics: ["Integrations"],
@@ -63,7 +63,7 @@ describe("doubt validation", () => {
       endpoints: ["https://api.example.com/v1/messages"],
     });
 
-    expect(parsed.message_base64).toBe("SGVsbG8=");
+    expect(parsed.notes).toBe("Webhook ping body");
     expect(parsed.difficulty).toBe("easy");
     expect(parsed.endpoints).toEqual(["https://api.example.com/v1/messages"]);
   });
@@ -79,10 +79,10 @@ describe("doubt validation", () => {
     });
 
     expect(parsed.attachments?.length).toBe(1);
-    expect(parsed.message_base64).toBeUndefined();
+    expect(parsed.notes).toBeUndefined();
   });
 
-  it("rejects ingest payload when message and attachments are both missing", () => {
+  it("rejects ingest payload when notes and attachments are both missing", () => {
     expect(() =>
       ingestDoubtSchema.parse({
         title: "Missing source",

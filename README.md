@@ -110,7 +110,7 @@ npm run dev
 
 ```json
 {
-  "message_base64": "SGVsbG8gd29ybGQ=",
+  "notes": "Optional plain text notes",
   "title": "Optional title",
   "subject": "Optional subject",
   "subtopics": ["Optional"],
@@ -133,9 +133,9 @@ Notes:
   - `Authorization: Bearer <access_token>`
   - `x-ingest-key: <your-personal-ingest-key>`
   - Supabase auth cookies
-- Decodes `message_base64` into `body_markdown` ("notes") and appends `endpoints` to the note body.
-- If `message_base64` is base64-encoded JSON, metadata fields can also be inferred from that payload.
+- Maps `notes` into `body_markdown` and appends `endpoints` to the note body.
 - `attachments` accepts base64 image payloads and stores them in the same storage bucket used by standard uploads.
+- At least one of `notes` or `attachments` is required.
 
 ## Quality Commands
 
