@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   ALLOWED_ATTACHMENT_MIME_TYPES,
   MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS_PER_DOUBT,
 } from "@/lib/constants";
 import { uniqueTags } from "@/lib/doubts/normalize";
 
@@ -18,6 +19,11 @@ const bodySchema = z.string().trim().min(1).max(50_000);
 const subjectSchema = z.string().trim().min(1).max(120);
 const roomIdSchema = z.uuid();
 const ingestEndpointSchema = z.string().trim().min(1).max(2_000);
+const ingestAttachmentSchema = z.object({
+  filename: z.string().trim().min(1).max(255).optional(),
+  mime_type: z.enum(ALLOWED_ATTACHMENT_MIME_TYPES),
+  data_base64: z.string().trim().min(1).max(8_000_000),
+});
 
 export const difficultySchema = z.enum(["easy", "medium", "hard"]);
 
@@ -61,7 +67,7 @@ export const listDoubtsQuerySchema = z.object({
 });
 
 export const ingestDoubtSchema = z.object({
-  message_base64: z.string().trim().min(1).max(200_000),
+  message_base64: z.string().trim().min(1).max(200_000).optional(),
   title: titleSchema.optional(),
   subject: subjectSchema.optional(),
   subtopics: z.array(tagSchema).max(20).optional(),
@@ -69,6 +75,10 @@ export const ingestDoubtSchema = z.object({
   error_tags: z.array(tagSchema).max(20).optional(),
   is_cleared: z.boolean().optional(),
   endpoints: z.array(ingestEndpointSchema).max(50).optional(),
+  attachments: z.array(ingestAttachmentSchema).max(MAX_ATTACHMENTS_PER_DOUBT).optional(),
+}).refine((value) => Boolean(value.message_base64 ?? value.attachments?.length), {
+  message: "Provide message_base64 or at least one attachment",
+  path: ["message_base64"],
 });
 
 export function parseListDoubtsQuery(searchParams: URLSearchParams) {

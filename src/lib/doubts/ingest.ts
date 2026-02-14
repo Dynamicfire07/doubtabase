@@ -62,9 +62,13 @@ function normalizeBase64(raw: string) {
     : `${normalized}${"=".repeat(4 - paddingLength)}`;
 }
 
-export function decodeBase64Message(raw: string) {
+export function decodeBase64Bytes(raw: string) {
   const normalized = normalizeBase64(raw);
-  return Buffer.from(normalized, "base64").toString("utf-8");
+  return Buffer.from(normalized, "base64");
+}
+
+export function decodeBase64Message(raw: string) {
+  return decodeBase64Bytes(raw).toString("utf-8");
 }
 
 function normalizeTagList(values: string[] | undefined, limit = 20) {
@@ -185,8 +189,8 @@ function buildBody(message: string, endpoints: string[]) {
 export function createDoubtInputFromIngest(
   input: IngestInput,
 ): z.infer<typeof createDoubtSchema> {
-  const decodedRaw = decodeBase64Message(input.message_base64);
-  const decodedMetadata = parseDecodedMetadata(decodedRaw.trim());
+  const decodedRaw = input.message_base64 ? decodeBase64Message(input.message_base64) : "";
+  const decodedMetadata = decodedRaw.trim() ? parseDecodedMetadata(decodedRaw.trim()) : {};
   const endpoints = normalizeEndpoints(input.endpoints ?? decodedMetadata.endpoints);
 
   const message = normalizeBodyText(decodedMetadata.message ?? decodedRaw);
@@ -195,7 +199,7 @@ export function createDoubtInputFromIngest(
   const title =
     normalizeText(input.title, 200) ??
     decodedMetadata.title ??
-    deriveTitle(body) ??
+    (message ? deriveTitle(body) : undefined) ??
     DEFAULT_TITLE;
 
   const subject =

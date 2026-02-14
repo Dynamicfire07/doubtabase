@@ -15,25 +15,36 @@ const authRequestExample = `curl -s 'https://doubtabase.sbs/api/auth/token' \\
     "password": "your-password"
   }'`;
 
-const authResponseExample = `{
-  "access_token": "<jwt>",
-  "refresh_token": "<refresh-token>",
-  "token_type": "bearer",
-  "expires_in": 3600,
-  "expires_at": 1739557565,
-  "user": {
-    "id": "<user-id>",
-    "email": "you@example.com"
+const browserRotateIngestKeyExample = `fetch('https://doubtabase.sbs/api/auth/ingest-key', {
+  method: 'POST',
+  credentials: 'include'
+})`;
+
+const rotateIngestKeyExample = `TOKEN="<paste-access-token>"
+
+curl -s 'https://doubtabase.sbs/api/auth/ingest-key' \\
+  -X POST \\
+  -H "authorization: Bearer $TOKEN" \\
+  -H 'content-type: application/json'`;
+
+const rotateIngestKeyResponseExample = `{
+  "api_key": "doubtakey_live_...",
+  "key": {
+    "id": "<key-id>",
+    "prefix": "doubtakey_live_...",
+    "created_at": "2026-02-14T00:00:00.000Z",
+    "last_used_at": null
   }
 }`;
 
-const ingestRequestExample = `TOKEN="<paste-access-token>"
+const ingestRequestExample = `INGEST_KEY="<paste-ingest-key>"
 MESSAGE_B64=$(printf '%s' 'Need help with this topic' | base64 | tr -d '\\n')
+IMAGE_B64=$(base64 < screenshot.png | tr -d '\\n')
 
 curl 'https://doubtabase.sbs/api/doubts/ingest' \\
   -X POST \\
   -H 'content-type: application/json' \\
-  -H "authorization: Bearer $TOKEN" \\
+  -H "x-ingest-key: $INGEST_KEY" \\
   --data-raw '{
     "message_base64": "'"$MESSAGE_B64"'",
     "title": "Auto doubt from OpenClaw",
@@ -42,7 +53,14 @@ curl 'https://doubtabase.sbs/api/doubts/ingest' \\
     "difficulty": "medium",
     "error_tags": ["Concept gap"],
     "is_cleared": false,
-    "endpoints": ["https://api.openclaw.ai/v1/messages"]
+    "endpoints": ["https://api.openclaw.ai/v1/messages"],
+    "attachments": [
+      {
+        "filename": "screenshot.png",
+        "mime_type": "image/png",
+        "data_base64": "'"$IMAGE_B64"'"
+      }
+    ]
   }'`;
 
 const ingestResponseExample = `{
@@ -59,13 +77,23 @@ const ingestResponseExample = `{
     "is_cleared": false,
     "created_at": "2026-02-14T00:00:00.000Z",
     "updated_at": "2026-02-14T00:00:00.000Z"
-  }
+  },
+  "attachments": [
+    {
+      "id": "<attachment-id>",
+      "doubt_id": "<doubt-id>",
+      "storage_path": "rooms/<room-id>/doubts/<doubt-id>/<file>.png",
+      "mime_type": "image/png",
+      "size_bytes": 120345,
+      "created_at": "2026-02-14T00:00:00.000Z"
+    }
+  ]
 }`;
 
 export const metadata: Metadata = {
   title: "OpenClaw API Docs",
   description:
-    "API reference for OpenClaw integration with Doughtabase personal vault ingest.",
+    "API reference for OpenClaw integration with Doubtabase personal vault ingest.",
 };
 
 export default function OpenClawDocsPage() {
@@ -95,8 +123,9 @@ export default function OpenClawDocsPage() {
               Push OpenClaw messages into your personal Doubtabase vault
             </h1>
             <p className="max-w-3xl text-base text-base-content/80 sm:text-lg">
-              This integration uses token login and a dedicated ingest endpoint. Every
-              write lands in the authenticated user&apos;s personal room only.
+              Use browser login once, rotate a personal ingest key once, and push
+              text plus base64 images. Every write lands in the authenticated
+              user&apos;s personal room only.
             </p>
           </div>
         </div>
@@ -116,43 +145,71 @@ export default function OpenClawDocsPage() {
         <div className="hero-fade-up hero-fade-up-delay-1 mt-6 rounded-3xl border border-base-300 bg-base-100 p-6 shadow-sm sm:p-8">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <h2 className={`${displayFont.className} text-3xl font-bold`}>
-              1. Create access token
+              1. Browser login once (recommended)
             </h2>
-            <span className="badge badge-outline">POST /api/auth/token</span>
+            <span className="badge badge-outline">Session auth</span>
           </div>
 
           <p className="mt-4 text-sm text-base-content/80">
-            Send email/password once and use the returned <code>access_token</code> as
-            Bearer token for ingest calls.
+            Have users log into <code>doubtabase.sbs</code> in browser. Then rotate an
+            ingest key once from that session, and OpenClaw uses the key forever
+            (until you rotate/revoke).
           </p>
 
           <h3 className="mt-6 text-sm font-semibold uppercase tracking-[0.2em] text-base-content/60">
-            Request
+            Browser Call
           </h3>
           <pre className="mt-2 overflow-x-auto rounded-2xl border border-base-300 bg-base-200/70 p-4 text-xs sm:text-sm">
-            <code>{authRequestExample}</code>
+            <code>{browserRotateIngestKeyExample}</code>
           </pre>
 
           <h3 className="mt-5 text-sm font-semibold uppercase tracking-[0.2em] text-base-content/60">
-            Response
+            Optional CLI Login
           </h3>
           <pre className="mt-2 overflow-x-auto rounded-2xl border border-base-300 bg-base-200/70 p-4 text-xs sm:text-sm">
-            <code>{authResponseExample}</code>
+            <code>{authRequestExample}</code>
           </pre>
         </div>
 
         <div className="hero-fade-up hero-fade-up-delay-2 mt-6 rounded-3xl border border-base-300 bg-base-100 p-6 shadow-sm sm:p-8">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <h2 className={`${displayFont.className} text-3xl font-bold`}>
-              2. Ingest doubt
+              2. Rotate personal ingest key
+            </h2>
+            <span className="badge badge-outline">POST /api/auth/ingest-key</span>
+          </div>
+
+          <p className="mt-4 text-sm text-base-content/80">
+            This is the recommended one-time setup for OpenClaw. Save the returned
+            key once and use it for all future ingests.
+          </p>
+
+          <h3 className="mt-6 text-sm font-semibold uppercase tracking-[0.2em] text-base-content/60">
+            Request
+          </h3>
+          <pre className="mt-2 overflow-x-auto rounded-2xl border border-base-300 bg-base-200/70 p-4 text-xs sm:text-sm">
+            <code>{rotateIngestKeyExample}</code>
+          </pre>
+
+          <h3 className="mt-5 text-sm font-semibold uppercase tracking-[0.2em] text-base-content/60">
+            Rotate Response
+          </h3>
+          <pre className="mt-2 overflow-x-auto rounded-2xl border border-base-300 bg-base-200/70 p-4 text-xs sm:text-sm">
+            <code>{rotateIngestKeyResponseExample}</code>
+          </pre>
+        </div>
+
+        <div className="hero-fade-up hero-fade-up-delay-2 mt-6 rounded-3xl border border-base-300 bg-base-100 p-6 shadow-sm sm:p-8">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h2 className={`${displayFont.className} text-3xl font-bold`}>
+              3. Ingest doubt with base64 attachments
             </h2>
             <span className="badge badge-outline">POST /api/doubts/ingest</span>
           </div>
 
           <p className="mt-4 text-sm text-base-content/80">
-            Send <code>message_base64</code> plus metadata fields. The decoded message
-            becomes <code>body_markdown</code> (notes), and endpoints are appended to the
-            notes body.
+            Send <code>message_base64</code> and/or <code>attachments</code>. Each
+            attachment is base64 image payload and is stored automatically.
           </p>
 
           <h3 className="mt-6 text-sm font-semibold uppercase tracking-[0.2em] text-base-content/60">
@@ -189,7 +246,7 @@ export default function OpenClawDocsPage() {
                     <code>message_base64</code>
                   </td>
                   <td>string</td>
-                  <td>Yes</td>
+                  <td>No*</td>
                   <td>Base64 payload. Decoded into notes/body_markdown.</td>
                 </tr>
                 <tr>
@@ -248,9 +305,20 @@ export default function OpenClawDocsPage() {
                   <td>No</td>
                   <td>Appended to notes under Source Endpoints.</td>
                 </tr>
+                <tr>
+                  <td>
+                    <code>attachments</code>
+                  </td>
+                  <td>array</td>
+                  <td>No*</td>
+                  <td>Up to 5 images; each has filename?, mime_type, data_base64.</td>
+                </tr>
               </tbody>
             </table>
           </div>
+          <p className="mt-3 text-xs text-base-content/60">
+            * At least one of <code>message_base64</code> or <code>attachments</code> is required.
+          </p>
         </div>
 
         <div className="hero-fade-up hero-fade-up-delay-3 mt-6 rounded-3xl border border-base-300 bg-base-100 p-6 shadow-sm sm:p-8">
@@ -270,7 +338,7 @@ export default function OpenClawDocsPage() {
                 </tr>
                 <tr>
                   <td>401</td>
-                  <td>Missing/invalid token credentials.</td>
+                  <td>Missing/invalid token or ingest key credentials.</td>
                 </tr>
                 <tr>
                   <td>404</td>

@@ -1,4 +1,8 @@
-import { createDoubtInputFromIngest, decodeBase64Message } from "@/lib/doubts/ingest";
+import {
+  createDoubtInputFromIngest,
+  decodeBase64Bytes,
+  decodeBase64Message,
+} from "@/lib/doubts/ingest";
 
 function toBase64(value: string) {
   return Buffer.from(value, "utf-8").toString("base64");
@@ -92,5 +96,25 @@ describe("doubt ingest helpers", () => {
         message_base64: "***not-base64***",
       }),
     ).toThrow("Invalid base64 message");
+  });
+
+  it("creates default body when no message is provided", () => {
+    const payload = createDoubtInputFromIngest({
+      attachments: [
+        {
+          mime_type: "image/png",
+          data_base64: "iVBORw0KGgoAAAANSUhEUgAAAAUA",
+        },
+      ],
+    });
+
+    expect(payload.title).toBe("OpenClaw Ingest");
+    expect(payload.subject).toBe("OpenClaw");
+    expect(payload.body_markdown).toBe("Ingested from OpenClaw.");
+  });
+
+  it("decodes base64 bytes for attachments", () => {
+    const bytes = decodeBase64Bytes("data:image/png;base64,SGVsbG8=");
+    expect(bytes.toString("utf-8")).toBe("Hello");
   });
 });

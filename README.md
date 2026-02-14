@@ -80,6 +80,9 @@ npm run dev
 ### Auth
 
 - `POST /api/auth/token` (email/password login that returns access + refresh token)
+- `GET /api/auth/ingest-key` (returns active personal ingest key metadata)
+- `POST /api/auth/ingest-key` (rotates personal ingest key and returns the new key once)
+- `DELETE /api/auth/ingest-key` (revokes active personal ingest key)
 
 ### Rooms
 
@@ -114,14 +117,25 @@ npm run dev
   "difficulty": "medium",
   "error_tags": ["Optional"],
   "is_cleared": false,
-  "endpoints": ["https://api.example.com/v1/ingest"]
+  "endpoints": ["https://api.example.com/v1/ingest"],
+  "attachments": [
+    {
+      "filename": "screenshot.png",
+      "mime_type": "image/png",
+      "data_base64": "iVBORw0KGgoAAA..."
+    }
+  ]
 }
 ```
 
 Notes:
-- Requires authentication via either `Authorization: Bearer <access_token>` or Supabase auth cookies.
+- Requires authentication via one of:
+  - `Authorization: Bearer <access_token>`
+  - `x-ingest-key: <your-personal-ingest-key>`
+  - Supabase auth cookies
 - Decodes `message_base64` into `body_markdown` ("notes") and appends `endpoints` to the note body.
 - If `message_base64` is base64-encoded JSON, metadata fields can also be inferred from that payload.
+- `attachments` accepts base64 image payloads and stores them in the same storage bucket used by standard uploads.
 
 ## Quality Commands
 
@@ -137,6 +151,7 @@ npm run build
 - Deploy app to Vercel
 - Configure production env vars in Vercel
 - Apply `0002_rooms.sql` before deploying app code
+- Apply `0005_ingest_api_keys.sql` before using ingest-key auth
 - Ensure Supabase daily backups are enabled
 - Configure uptime monitor for `/api/health`
 - Connect Sentry DSN for client + server error tracking
@@ -151,6 +166,7 @@ Main tables:
 - `public.doubts`
 - `public.doubt_attachments`
 - `public.doubt_comments`
+- `public.user_ingest_keys`
 
 Enums:
 

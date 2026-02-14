@@ -68,6 +68,28 @@ describe("doubt validation", () => {
     expect(parsed.endpoints).toEqual(["https://api.example.com/v1/messages"]);
   });
 
+  it("accepts attachment-only ingest payload", () => {
+    const parsed = ingestDoubtSchema.parse({
+      attachments: [
+        {
+          mime_type: "image/png",
+          data_base64: "iVBORw0KGgoAAAANSUhEUgAAAAUA",
+        },
+      ],
+    });
+
+    expect(parsed.attachments?.length).toBe(1);
+    expect(parsed.message_base64).toBeUndefined();
+  });
+
+  it("rejects ingest payload when message and attachments are both missing", () => {
+    expect(() =>
+      ingestDoubtSchema.parse({
+        title: "Missing source",
+      }),
+    ).toThrow();
+  });
+
   it("parses query filters", () => {
     const params = new URLSearchParams({
       room_id: "22222222-2222-4222-8222-222222222222",
