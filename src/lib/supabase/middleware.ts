@@ -4,6 +4,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { hasSupabasePublicEnv, publicEnv } from "@/lib/env/public";
 import type { Database } from "@/lib/supabase/database.types";
 
+function hasSupabaseAuthCookies(request: NextRequest) {
+  return request.cookies.getAll().some((cookie) => cookie.name.startsWith("sb-"));
+}
+
 export async function updateSession(request: NextRequest) {
   if (!hasSupabasePublicEnv()) {
     throw new Error(
@@ -12,6 +16,10 @@ export async function updateSession(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request });
+
+  if (!hasSupabaseAuthCookies(request)) {
+    return response;
+  }
 
   const supabase = createServerClient<Database>(
     publicEnv.NEXT_PUBLIC_SUPABASE_URL,

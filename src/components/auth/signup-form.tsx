@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { getAuthErrorMessage, getOAuthRedirectTo } from "@/lib/auth/oauth";
@@ -21,6 +21,26 @@ export function SignupForm() {
   const [success, setSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function redirectIfAuthenticated() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (isMounted && session) {
+        router.replace("/dashboard");
+      }
+    }
+
+    void redirectIfAuthenticated();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [router, supabase]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -2,10 +2,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { Space_Grotesk } from "next/font/google";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-export const dynamic = "force-dynamic";
-
 const displayFont = Space_Grotesk({
   subsets: ["latin"],
   weight: ["500", "700"],
@@ -72,12 +68,7 @@ const faqItems = [
   },
 ] as const;
 
-export default async function Home() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+export default function Home() {
   return (
     <main className="min-h-screen bg-base-200">
       <section className="relative isolate overflow-hidden border-b border-base-300 bg-gradient-to-br from-base-100 via-base-200 to-warning/10">
@@ -111,15 +102,9 @@ export default async function Home() {
               <Link href="/login" className="btn btn-neutral btn-sm btn-force-white">
                 Log in
               </Link>
-              {user ? (
-                <Link href="/dashboard" className="btn btn-primary btn-sm btn-force-white">
-                  Dashboard
-                </Link>
-              ) : (
-                <Link href="/signup" className="btn btn-primary btn-sm btn-force-white">
-                  Sign up
-                </Link>
-              )}
+              <Link href="/signup" className="btn btn-primary btn-sm btn-force-white">
+                Sign up
+              </Link>
             </nav>
           </header>
 
@@ -141,25 +126,12 @@ export default async function Home() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                {user ? (
-                  <>
-                    <Link href="/dashboard" className="btn btn-primary btn-lg btn-force-white">
-                      Continue to Dashboard
-                    </Link>
-                    <Link href="/login" className="btn btn-neutral btn-lg btn-force-white">
-                      Switch account
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <Link href="/signup" className="btn btn-primary btn-lg btn-force-white">
-                      Create account
-                    </Link>
-                    <Link href="/login" className="btn btn-neutral btn-lg btn-force-white">
-                      I already have one
-                    </Link>
-                  </>
-                )}
+                <Link href="/signup" className="btn btn-primary btn-lg btn-force-white">
+                  Create account
+                </Link>
+                <Link href="/login" className="btn btn-neutral btn-lg btn-force-white">
+                  I already have one
+                </Link>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -279,11 +251,8 @@ export default async function Home() {
                 Three moves, no friction
               </h2>
             </div>
-            <Link
-              href={user ? "/dashboard" : "/signup"}
-              className="btn btn-primary btn-force-white"
-            >
-              {user ? "Open workspace" : "Start free"}
+            <Link href="/signup" className="btn btn-primary btn-force-white">
+              Start free
             </Link>
           </div>
 

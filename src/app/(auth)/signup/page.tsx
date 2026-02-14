@@ -1,20 +1,8 @@
-import { redirect } from "next/navigation";
 import Image from "next/image";
+import { Suspense } from "react";
 
 import { SignupForm } from "@/components/auth/signup-form";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-export const dynamic = "force-dynamic";
-
-export default async function SignupPage() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
-    redirect("/dashboard");
-  }
+export default function SignupPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-base-200 p-4">
@@ -38,7 +26,9 @@ export default async function SignupPage() {
             </p>
           </div>
 
-          <SignupForm />
+          <Suspense fallback={null}>
+            <SignupForm />
+          </Suspense>
         </div>
       </div>
     </main>

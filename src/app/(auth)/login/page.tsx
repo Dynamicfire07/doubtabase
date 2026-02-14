@@ -1,20 +1,8 @@
-import { redirect } from "next/navigation";
 import Image from "next/image";
+import { Suspense } from "react";
 
 import { LoginForm } from "@/components/auth/login-form";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-export const dynamic = "force-dynamic";
-
-export default async function LoginPage() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
-    redirect("/dashboard");
-  }
+export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-base-200 p-4">
@@ -38,7 +26,9 @@ export default async function LoginPage() {
             </p>
           </div>
 
-          <LoginForm />
+          <Suspense fallback={null}>
+            <LoginForm />
+          </Suspense>
         </div>
       </div>
     </main>
