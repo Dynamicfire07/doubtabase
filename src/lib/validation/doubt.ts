@@ -17,6 +17,7 @@ const titleSchema = z.string().trim().min(3).max(200);
 const bodySchema = z.string().trim().min(1).max(50_000);
 const subjectSchema = z.string().trim().min(1).max(120);
 const roomIdSchema = z.uuid();
+const ingestEndpointSchema = z.string().trim().min(1).max(2_000);
 
 export const difficultySchema = z.enum(["easy", "medium", "hard"]);
 
@@ -57,6 +58,17 @@ export const listDoubtsQuerySchema = z.object({
   is_cleared: z.boolean().optional(),
   cursor: z.string().trim().min(1).optional(),
   limit: z.number().int().min(1).max(50).default(20),
+});
+
+export const ingestDoubtSchema = z.object({
+  message_base64: z.string().trim().min(1).max(200_000),
+  title: titleSchema.optional(),
+  subject: subjectSchema.optional(),
+  subtopics: z.array(tagSchema).max(20).optional(),
+  difficulty: difficultySchema.optional(),
+  error_tags: z.array(tagSchema).max(20).optional(),
+  is_cleared: z.boolean().optional(),
+  endpoints: z.array(ingestEndpointSchema).max(50).optional(),
 });
 
 export function parseListDoubtsQuery(searchParams: URLSearchParams) {

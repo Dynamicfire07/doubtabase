@@ -1,5 +1,6 @@
 import {
   createDoubtSchema,
+  ingestDoubtSchema,
   normalizeCreateInput,
   parseListDoubtsQuery,
 } from "@/lib/validation/doubt";
@@ -48,6 +49,23 @@ describe("doubt validation", () => {
         error_tags: [],
       }),
     ).toThrow();
+  });
+
+  it("parses ingest payload with optional fields", () => {
+    const parsed = ingestDoubtSchema.parse({
+      message_base64: "SGVsbG8=",
+      title: "Webhook ping",
+      subject: "APIs",
+      subtopics: ["Integrations"],
+      difficulty: "easy",
+      error_tags: ["Timeout"],
+      is_cleared: false,
+      endpoints: ["https://api.example.com/v1/messages"],
+    });
+
+    expect(parsed.message_base64).toBe("SGVsbG8=");
+    expect(parsed.difficulty).toBe("easy");
+    expect(parsed.endpoints).toEqual(["https://api.example.com/v1/messages"]);
   });
 
   it("parses query filters", () => {

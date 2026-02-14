@@ -99,6 +99,9 @@ export default function Home() {
               <a href="#how-it-works" className="btn btn-ghost btn-sm hidden sm:inline-flex">
                 How it works
               </a>
+              <Link href="/openclaw" className="btn btn-ghost btn-sm hidden md:inline-flex">
+                OpenClaw API
+              </Link>
               <Link href="/login" className="btn btn-neutral btn-sm btn-force-white">
                 Log in
               </Link>

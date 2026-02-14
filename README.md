@@ -77,6 +77,10 @@ npm run dev
 
 ## API Surface
 
+### Auth
+
+- `POST /api/auth/token` (email/password login that returns access + refresh token)
+
 ### Rooms
 
 - `GET /api/rooms`
@@ -88,6 +92,7 @@ npm run dev
 ### Doubts
 
 - `POST /api/doubts` (supports `room_id`; falls back to personal room if omitted)
+- `POST /api/doubts/ingest` (base64 ingest; always writes to your personal room)
 - `GET /api/doubts?room_id&q&subject&subtopic&difficulty&error_tag&is_cleared&cursor&limit`
 - `GET /api/doubts/:id`
 - `PATCH /api/doubts/:id`
@@ -97,6 +102,26 @@ npm run dev
 - `POST /api/doubts/:id/comments`
 - `DELETE /api/attachments/:id` (owner-only in shared rooms)
 - `GET /api/health`
+
+`POST /api/doubts/ingest` request body:
+
+```json
+{
+  "message_base64": "SGVsbG8gd29ybGQ=",
+  "title": "Optional title",
+  "subject": "Optional subject",
+  "subtopics": ["Optional"],
+  "difficulty": "medium",
+  "error_tags": ["Optional"],
+  "is_cleared": false,
+  "endpoints": ["https://api.example.com/v1/ingest"]
+}
+```
+
+Notes:
+- Requires authentication via either `Authorization: Bearer <access_token>` or Supabase auth cookies.
+- Decodes `message_base64` into `body_markdown` ("notes") and appends `endpoints` to the note body.
+- If `message_base64` is base64-encoded JSON, metadata fields can also be inferred from that payload.
 
 ## Quality Commands
 
