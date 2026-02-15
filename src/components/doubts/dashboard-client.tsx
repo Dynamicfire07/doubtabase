@@ -1716,7 +1716,7 @@ export function DashboardClient() {
       </section>
 
       {error ? (
-        <div role="alert" className="alert alert-error">
+        <div role="alert" aria-live="assertive" className="alert alert-error">
           <span>{error}</span>
         </div>
       ) : null}
@@ -1730,7 +1730,7 @@ export function DashboardClient() {
                   Add Question
                 </h2>
                 <span className="text-xs text-base-content/60">
-                  Cmd+Enter saves from anywhere in this form
+                  Ctrl/Cmd + Enter saves from anywhere in this form
                 </span>
               </div>
 
@@ -2430,7 +2430,7 @@ export function DashboardClient() {
 
             <div className="space-y-4">
               {exportError ? (
-                <div role="alert" className="alert alert-error">
+                <div role="alert" aria-live="assertive" className="alert alert-error">
                   <span>{exportError}</span>
                 </div>
               ) : null}
