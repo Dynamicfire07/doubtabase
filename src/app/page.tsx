@@ -70,7 +70,13 @@ const faqItems = [
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-base-200">
+    <main id="main-content" className="min-h-screen bg-base-200">
+      <a
+        href="#how-it-works"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-base-100 focus:px-3 focus:py-2 focus:shadow"
+      >
+        Skip to how it works
+      </a>
       <section className="relative isolate overflow-hidden border-b border-base-300 bg-gradient-to-br from-base-100 via-base-200 to-warning/10">
         <div className="hero-grid-pan pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(15,23,42,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.06)_1px,transparent_1px)] bg-[size:34px_34px] opacity-20" />
         <div className="hero-float pointer-events-none absolute -left-24 top-14 h-64 w-64 rounded-full bg-info/20 blur-3xl" />
@@ -95,7 +101,7 @@ export default function Home() {
                 </span>
               </div>
             </div>
-            <nav className="flex items-center gap-2">
+            <nav aria-label="Primary" className="flex items-center gap-2">
               <a href="#how-it-works" className="btn btn-ghost btn-sm hidden sm:inline-flex">
                 How it works
               </a>

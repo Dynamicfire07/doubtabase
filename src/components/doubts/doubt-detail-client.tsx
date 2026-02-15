@@ -287,7 +287,7 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
 
   if (pageError || !data) {
     return (
-      <div role="alert" className="alert alert-error">
+      <div role="alert" aria-live="assertive" className="alert alert-error">
         <span>{pageError ?? "Doubt not found."}</span>
       </div>
     );
@@ -296,7 +296,7 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
   return (
     <div className="space-y-6">
       {actionError ? (
-        <div role="alert" className="alert alert-error">
+        <div role="alert" aria-live="assertive" className="alert alert-error">
           <span>{actionError}</span>
         </div>
       ) : null}
@@ -308,6 +308,7 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
         <button
           type="button"
           onClick={() => void onToggleFullscreen()}
+          aria-pressed={isFullscreen}
           className="btn btn-sm btn-outline"
         >
           {isFullscreen ? "Exit full screen" : "Full screen"}
