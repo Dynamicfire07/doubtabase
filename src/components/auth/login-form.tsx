@@ -1,9 +1,17 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import {
+  clearCachedLoginEmail,
+  hasCachedLoginSessionHint,
+  readCachedLoginEmail,
+  setCachedLoginSessionHint,
+  writeCachedLoginEmail,
+} from "@/lib/auth/client-cache";
 import { getAuthErrorMessage, getOAuthRedirectTo } from "@/lib/auth/oauth";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
@@ -15,12 +23,28 @@ export function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberEmail, setRememberEmail] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
+    const cachedEmail = readCachedLoginEmail();
+
+    if (cachedEmail) {
+      setEmail((currentEmail) => currentEmail || cachedEmail);
+    }
+
+    if (hasCachedLoginSessionHint()) {
+      void router.prefetch("/dashboard");
+    }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCachedLoginSessionHint(Boolean(session));
+    });
 
     async function redirectIfAuthenticated() {
       const {
@@ -28,7 +52,13 @@ export function LoginForm() {
       } = await supabase.auth.getSession();
 
       if (isMounted && session) {
+        setCachedLoginSessionHint(true);
         router.replace("/dashboard");
+        return;
+      }
+
+      if (isMounted) {
+        setCachedLoginSessionHint(false);
       }
     }
 
@@ -36,6 +66,7 @@ export function LoginForm() {
 
     return () => {
       isMounted = false;
+      subscription.unsubscribe();
     };
   }, [router, supabase]);
 
@@ -44,8 +75,16 @@ export function LoginForm() {
     setError(null);
     setIsSubmitting(true);
 
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (rememberEmail) {
+      writeCachedLoginEmail(normalizedEmail);
+    } else {
+      clearCachedLoginEmail();
+    }
+
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
+      email: normalizedEmail,
       password,
     });
 
@@ -55,6 +94,7 @@ export function LoginForm() {
       return;
     }
 
+    setCachedLoginSessionHint(true);
     router.replace("/dashboard");
     router.refresh();
   }
@@ -62,6 +102,12 @@ export function LoginForm() {
   async function onGoogleSignIn() {
     setError(null);
     setIsGoogleSubmitting(true);
+
+    if (rememberEmail) {
+      writeCachedLoginEmail(email);
+    } else {
+      clearCachedLoginEmail();
+    }
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -80,11 +126,18 @@ export function LoginForm() {
   }
 
   return (
-    <form className="space-y-4" onSubmit={onSubmit}>
-      <button
+    <motion.form
+      className="space-y-4"
+      onSubmit={onSubmit}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+    >
+      <motion.button
         type="button"
         disabled={isSubmitting || isGoogleSubmitting}
         className="btn btn-outline w-full"
+        whileTap={{ scale: 0.99 }}
         onClick={() => {
           void onGoogleSignIn();
         }}
@@ -113,7 +166,7 @@ export function LoginForm() {
           />
         </svg>
         {isGoogleSubmitting ? "Redirecting..." : "Continue with Google"}
-      </button>
+      </motion.button>
 
       <div className="divider my-1 text-xs text-base-content/60">or</div>
 
@@ -149,19 +202,46 @@ export function LoginForm() {
         />
       </div>
 
-      {error || callbackError ? (
-        <div role="alert" className="alert alert-error py-2 text-sm">
-          <span>{error ?? callbackError}</span>
-        </div>
-      ) : null}
+      <label className="label cursor-pointer justify-start gap-3 py-0">
+        <input
+          type="checkbox"
+          className="checkbox checkbox-sm"
+          checked={rememberEmail}
+          onChange={(event) => {
+            const checked = event.target.checked;
+            setRememberEmail(checked);
 
-      <button
+            if (!checked) {
+              clearCachedLoginEmail();
+            }
+          }}
+        />
+        <span className="label-text text-sm">Remember email on this device</span>
+      </label>
+
+      <AnimatePresence initial={false}>
+        {error || callbackError ? (
+          <motion.div
+            role="alert"
+            className="alert alert-error overflow-hidden py-2 text-sm"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <span>{error ?? callbackError}</span>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <motion.button
         type="submit"
         disabled={isSubmitting || isGoogleSubmitting}
         className="btn btn-primary w-full"
+        whileTap={{ scale: 0.99 }}
       >
         {isSubmitting ? "Signing in..." : "Sign in"}
-      </button>
+      </motion.button>
 
       <p className="text-center text-sm text-base-content/70">
         New here?{" "}
@@ -169,6 +249,6 @@ export function LoginForm() {
           Create an account
         </Link>
       </p>
-    </form>
+    </motion.form>
   );
 }

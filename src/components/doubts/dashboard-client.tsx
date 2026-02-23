@@ -15,6 +15,8 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
+import { clearCachedLoginSessionHint } from "@/lib/auth/client-cache";
+import { mediaCdnUrl, publicAssetUrl } from "@/lib/cdn";
 import { MAX_ATTACHMENT_BYTES, SUPABASE_ATTACHMENTS_BUCKET } from "@/lib/constants";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type {
@@ -114,6 +116,7 @@ const initialFilterDraft: FilterDraft = {
 };
 
 const PERSONAL_CACHE_TTL_MS = 10 * 60 * 1000;
+const SHARED_ROOM_DOUBTS_CACHE_TTL_MS = 30 * 1000;
 const ROOMS_CACHE_TTL_MS = 2 * 60 * 1000;
 const MEMBERS_CACHE_TTL_MS = 60 * 1000;
 const ROOMS_CACHE_KEY = "doubtabase.rooms.v1";
@@ -765,8 +768,10 @@ export function DashboardClient() {
 
       const roomId = selectedRoomId;
       const isPersonalRoom = roomById.get(roomId)?.is_personal ?? false;
-      const canUseLocalPersonalCache =
-        !append && !cursor && !options.fresh && isPersonalRoom;
+      const canUseLocalDoubtsCache = !append && !cursor && !options.fresh;
+      const doubtsCacheTtlMs = isPersonalRoom
+        ? PERSONAL_CACHE_TTL_MS
+        : SHARED_ROOM_DOUBTS_CACHE_TTL_MS;
 
       if (!append) {
         setIsLoading(true);
@@ -794,7 +799,7 @@ export function DashboardClient() {
         params.set("is_cleared", appliedFilters.is_cleared);
       }
 
-      if (canUseLocalPersonalCache) {
+      if (canUseLocalDoubtsCache) {
         const cached = readCachedJson<PersonalDoubtsCachePayload>(
           personalDoubtsCacheKey(roomId, appliedFilters),
         );
@@ -804,7 +809,7 @@ export function DashboardClient() {
           cached.version === 1 &&
           cached.room_id === roomId &&
           cached.filter_key === buildFilterKey(appliedFilters) &&
-          Date.now() - cached.saved_at <= PERSONAL_CACHE_TTL_MS
+          Date.now() - cached.saved_at <= doubtsCacheTtlMs
         ) {
           setDoubts(cached.items);
           setNextCursor(cached.next_cursor);
@@ -902,7 +907,7 @@ export function DashboardClient() {
           }
         }
 
-        if (!append && isPersonalRoom) {
+        if (!append) {
           writeCachedJson(
             personalDoubtsCacheKey(roomId, appliedFilters),
             {
@@ -1102,6 +1107,7 @@ export function DashboardClient() {
 
   async function onSignOut() {
     await supabase.auth.signOut();
+    clearCachedLoginSessionHint();
     router.replace("/login");
     router.refresh();
   }
@@ -1694,7 +1700,7 @@ export function DashboardClient() {
             <div className="flex items-center gap-3">
               <div className="relative h-9 w-9 overflow-hidden rounded-lg border border-base-300 bg-base-200">
                 <Image
-                  src="/brand-icon.svg"
+                  src={publicAssetUrl("/brand-icon.svg")}
                   alt="Doubts App logo"
                   fill
                   className="object-contain p-1"
@@ -2088,7 +2094,7 @@ export function DashboardClient() {
                                   {/* Dynamic signed URLs are not known at build time. */}
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
-                                    src={item.thumbnail_url_signed}
+                                    src={mediaCdnUrl(item.thumbnail_url_signed) ?? ""}
                                     alt="Doubt thumbnail"
                                     className="h-full w-full object-cover"
                                     loading="lazy"

@@ -2,6 +2,7 @@ import Image from "next/image";
 import { Suspense } from "react";
 
 import { SignupForm } from "@/components/auth/signup-form";
+import { publicAssetUrl } from "@/lib/cdn";
 export default function SignupPage() {
 
   return (
@@ -12,7 +13,7 @@ export default function SignupPage() {
             <div className="mb-2 flex items-center gap-3">
               <div className="relative h-9 w-9 overflow-hidden rounded-lg border border-base-300 bg-base-200">
                 <Image
-                  src="/brand-icon.svg"
+                  src={publicAssetUrl("/brand-icon.svg")}
                   alt="Doubts App logo"
                   fill
                   className="object-contain p-1"

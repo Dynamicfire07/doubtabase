@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 
+import { getCdnPreconnectOrigins, publicAssetUrl } from "@/lib/cdn";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,11 +15,13 @@ export const metadata: Metadata = {
   description:
     "Capture, filter, and clear doubts with plain-text notes and image attachments.",
   icons: {
-    icon: "/brand-icon.svg",
-    shortcut: "/brand-icon.svg",
-    apple: "/brand-icon.svg",
+    icon: publicAssetUrl("/brand-icon.svg"),
+    shortcut: publicAssetUrl("/brand-icon.svg"),
+    apple: publicAssetUrl("/brand-icon.svg"),
   },
 };
+
+const cdnPreconnectOrigins = getCdnPreconnectOrigins();
 
 export default function RootLayout({
   children,
@@ -27,6 +30,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-theme="light">
+      <head>
+        {cdnPreconnectOrigins.map((origin) => (
+          <link key={origin} rel="preconnect" href={origin} crossOrigin="" />
+        ))}
+      </head>
       <body
         className={`${geistSans.variable} flex min-h-screen flex-col bg-base-200 font-sans text-base-content antialiased`}
       >

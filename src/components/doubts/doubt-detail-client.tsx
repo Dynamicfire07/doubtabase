@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
+import { mediaCdnUrl } from "@/lib/cdn";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { Attachment, Doubt, DoubtComment, RoomRole } from "@/types/domain";
 
@@ -396,7 +397,7 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
                         {/* Signed URLs are generated at runtime; Next/Image remote patterns are not static here. */}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={attachment.public_url_signed}
+                          src={mediaCdnUrl(attachment.public_url_signed) ?? ""}
                           alt="Doubt attachment"
                           className="h-64 w-full object-cover"
                           loading="lazy"
@@ -407,7 +408,7 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
                             type="button"
                             className="btn btn-xs btn-primary"
                             onClick={() =>
-                              setSelectedImageUrl(attachment.public_url_signed)
+                              setSelectedImageUrl(mediaCdnUrl(attachment.public_url_signed))
                             }
                           >
                             View full image
@@ -488,7 +489,7 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={selectedImageUrl}
+              src={mediaCdnUrl(selectedImageUrl) ?? ""}
               alt="Full-size doubt attachment"
               className="max-h-[78vh] w-full rounded-box object-contain"
               loading="eager"

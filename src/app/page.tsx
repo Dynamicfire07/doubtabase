@@ -2,6 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { Space_Grotesk } from "next/font/google";
 
+import { publicAssetUrl } from "@/lib/cdn";
+
 const displayFont = Space_Grotesk({
   subsets: ["latin"],
   weight: ["500", "700"],
@@ -87,7 +89,7 @@ export default function Home() {
             <div className="flex items-center gap-3">
               <div className="relative h-9 w-9 overflow-hidden rounded-lg border border-base-300 bg-base-100">
                 <Image
-                  src="/brand-icon.svg"
+                  src={publicAssetUrl("/brand-icon.svg")}
                   alt="Doubts App logo"
                   fill
                   className="object-contain p-1"

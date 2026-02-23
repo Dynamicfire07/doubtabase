@@ -63,26 +63,33 @@ export async function GET(
       return notFoundResponse("Doubt not found");
     }
 
-    const { data: attachments, error: attachmentsError } = await supabase
-      .from("doubt_attachments")
-      .select("id,doubt_id,storage_path,mime_type,size_bytes,created_at")
-      .eq("doubt_id", id)
-      .order("created_at", { ascending: false });
+    const [
+      { data: attachmentsData, error: attachmentsError },
+      { data: commentsData, error: commentsError },
+    ] = await Promise.all([
+      supabase
+        .from("doubt_attachments")
+        .select("id,doubt_id,storage_path,mime_type,size_bytes,created_at")
+        .eq("doubt_id", id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("doubt_comments")
+        .select("id,doubt_id,user_id,body,created_at")
+        .eq("doubt_id", id)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true }),
+    ]);
 
     if (attachmentsError) {
       throw attachmentsError;
     }
 
-    const { data: comments, error: commentsError } = await supabase
-      .from("doubt_comments")
-      .select("id,doubt_id,user_id,body,created_at")
-      .eq("doubt_id", id)
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true });
-
     if (commentsError) {
       throw commentsError;
     }
+
+    const attachments = attachmentsData ?? [];
+    const comments = commentsData ?? [];
 
     const signedMap = new Map<string, string | null>();
 
