@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { Fraunces, IBM_Plex_Mono, Sora } from "next/font/google";
 import {
   useCallback,
   useEffect,
@@ -28,6 +29,25 @@ import type {
   RoomMember,
   RoomsListResponse,
 } from "@/types/domain";
+
+const dashboardUiFont = Sora({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-db-ui",
+});
+
+const dashboardDisplayFont = Fraunces({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-db-display",
+});
+
+const dashboardMonoFont = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["500"],
+  variable: "--font-db-mono",
+});
 
 type DraftRow = {
   title: string;
@@ -201,14 +221,14 @@ function formatDate(value: string) {
 
 function difficultyBadgeClass(difficulty: Difficulty) {
   if (difficulty === "easy") {
-    return "badge badge-success badge-outline";
+    return "badge badge-outline db-difficulty-pill db-difficulty-pill-easy";
   }
 
   if (difficulty === "hard") {
-    return "badge badge-error badge-outline";
+    return "badge badge-outline db-difficulty-pill db-difficulty-pill-hard";
   }
 
-  return "badge badge-warning badge-outline";
+  return "badge badge-outline db-difficulty-pill db-difficulty-pill-medium";
 }
 
 async function parseError(response: Response): Promise<string> {
@@ -1691,51 +1711,136 @@ export function DashboardClient() {
 
   const openCount = doubts.filter((item) => !item.is_cleared).length;
   const clearedCount = doubts.length - openCount;
+  const activeFilterCount = [
+    appliedFilters.q.trim(),
+    appliedFilters.subject.trim(),
+    appliedFilters.is_cleared,
+  ].filter(Boolean).length;
 
   return (
-    <div className="w-full space-y-4 p-4 lg:p-6">
-      <section className="card border border-base-300 bg-base-100 shadow-sm">
-        <div className="card-body gap-2 p-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="relative h-9 w-9 overflow-hidden rounded-lg border border-base-300 bg-base-200">
-                <Image
-                  src={publicAssetUrl("/brand-icon.svg")}
-                  alt="Doubts App logo"
-                  fill
-                  className="object-contain p-1"
-                  priority
-                />
+    <div
+      className={`${dashboardUiFont.variable} ${dashboardDisplayFont.variable} ${dashboardMonoFont.variable} db-shell relative w-full overflow-x-clip p-4 lg:p-6`}
+    >
+      <div className="db-bg-orb db-bg-orb-a pointer-events-none absolute -left-20 top-8" />
+      <div className="db-bg-orb db-bg-orb-b pointer-events-none absolute right-0 top-24" />
+      <div className="db-bg-orb db-bg-orb-c pointer-events-none absolute bottom-10 left-1/3" />
+
+      <section className="db-hero card border-0 shadow-none">
+        <div className="card-body gap-5 p-0">
+          <div className="db-panel flex flex-col gap-4 rounded-[26px] p-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-3">
+                <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-white/70 bg-white shadow-sm">
+                  <Image
+                    src={publicAssetUrl("/brand-icon.svg")}
+                    alt="Doubts App logo"
+                    fill
+                    className="object-contain p-1"
+                    priority
+                  />
+                </div>
+                <div className="min-w-0">
+                  <p className="db-kicker">DATABASE WORKSPACE</p>
+                  <h1
+                    className={`${dashboardDisplayFont.className} db-display-title text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl`}
+                  >
+                    Doubt Sheet
+                  </h1>
+                </div>
               </div>
-              <h1 className="text-2xl font-bold">Doubt Sheet</h1>
-            </div>
-            <p className="text-sm text-base-content/70">
-              Room: {selectedRoom?.name ?? "No room selected"}
-            </p>
-            {editingId ? (
-              <p className="mt-1 text-xs font-medium text-warning">
-                Editing row. Save to update this doubt.
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="db-chip db-chip-strong">
+                  {selectedRoom?.name ?? "No room selected"}
+                </span>
+                <span className="db-chip">
+                  {selectedRoom?.is_personal ? "Personal room" : "Shared room"}
+                </span>
+                <span className="db-chip">Role: {selectedRoom?.role ?? "-"}</span>
+                {activeFilterCount > 0 ? (
+                  <span className="db-chip db-chip-accent">
+                    {activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+                {editingId ? (
+                  <span className="db-chip db-chip-warn">Editing row in progress</span>
+                ) : null}
+              </div>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+                A cleaner, faster database for capturing doubts, tagging patterns,
+                and tracking what is still open.
               </p>
-            ) : null}
+            </div>
+
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void onOpenExportModal()}
+                disabled={!selectedRoomId}
+                className="btn btn-sm btn-secondary"
+              >
+                Export PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => void fetchDoubts(undefined, false, { fresh: true })}
+                disabled={!selectedRoomId || isLoading}
+                className="btn btn-sm btn-outline"
+              >
+                {isLoading ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="db-stat-card">
+              <p className="db-kicker">Total rows</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-950">{doubts.length}</p>
+              <p className="text-xs text-slate-500">Loaded in current room + filters</p>
+            </div>
+            <div className="db-stat-card">
+              <p className="db-kicker">Open</p>
+              <p className="mt-2 text-2xl font-semibold text-amber-700">{openCount}</p>
+              <p className="text-xs text-slate-500">Still unresolved</p>
+            </div>
+            <div className="db-stat-card">
+              <p className="db-kicker">Cleared</p>
+              <p className="mt-2 text-2xl font-semibold text-emerald-700">{clearedCount}</p>
+              <p className="text-xs text-slate-500">Marked solved</p>
+            </div>
+            <div className="db-stat-card">
+              <p className="db-kicker">Workspace</p>
+              <p className="mt-2 line-clamp-1 text-xl font-semibold text-slate-950">
+                {selectedRoom?.name ?? "-"}
+              </p>
+              <p className="text-xs text-slate-500">
+                {selectedRoom?.member_count ?? 0} member
+                {(selectedRoom?.member_count ?? 0) === 1 ? "" : "s"}
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       {error ? (
-        <div role="alert" aria-live="assertive" className="alert alert-error">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="alert alert-error border border-red-200/80 bg-red-50/90 text-red-900 shadow-sm"
+        >
           <span>{error}</span>
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <main className="space-y-4 xl:order-2">
-          <section className="card border border-primary/30 bg-base-100 shadow-sm">
+      <div className="db-layout-grid mt-4 grid gap-4 xl:grid-cols-[330px_minmax(0,1fr)]">
+        <main className="min-w-0 space-y-4 xl:order-2">
+          <section className="card db-card db-card-accent">
             <div className="card-body gap-3 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/70">
+                <h2 className={`${dashboardDisplayFont.className} text-xl font-semibold tracking-tight text-slate-950`}>
                   Add Question
                 </h2>
-                <span className="text-xs text-base-content/60">
+                <span className="db-chip db-chip-soft">
                   Ctrl/Cmd + Enter saves from anywhere in this form
                 </span>
               </div>
@@ -1743,7 +1848,7 @@ export function DashboardClient() {
               <form
                 onSubmit={onAddRow}
                 onKeyDown={onAddRowShortcut}
-                className="grid gap-2 md:grid-cols-2 xl:grid-cols-12"
+                className="db-form-grid grid gap-2 md:grid-cols-2 xl:grid-cols-12"
               >
                 <div className="md:col-span-2 xl:col-span-2">
                   <label className="label py-1">
@@ -1926,8 +2031,21 @@ export function DashboardClient() {
             </div>
           </section>
 
-          <section className="card border border-base-300 bg-base-100 shadow-sm">
+          <section className="card db-card">
             <div className="card-body p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="db-kicker">FILTERS + ACTIONS</p>
+                  <p className="text-sm text-slate-600">
+                    Narrow the database, reset quickly, or export the current room.
+                  </p>
+                </div>
+                <div className="db-chip db-chip-soft">
+                  {appliedFilters.q || appliedFilters.subject || appliedFilters.is_cleared
+                    ? "Filters applied"
+                    : "No filters applied"}
+                </div>
+              </div>
               <div className="flex flex-wrap items-end gap-2">
                 <div className="min-w-[220px] flex-1">
                   <label className="label pb-1">
@@ -2017,9 +2135,24 @@ export function DashboardClient() {
             </div>
           </section>
 
-          <section className="overflow-x-auto rounded-box border border-base-300 bg-base-100 shadow-sm">
-            <table className="table table-zebra table-sm min-w-[1550px]">
-              <thead>
+          <section className="db-table-shell rounded-[22px] border border-white/70 bg-white/85 shadow-sm backdrop-blur">
+            <div className="db-table-toolbar flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 px-4 py-3">
+              <div>
+                <p className="db-kicker">MAIN DATABASE</p>
+                <h2 className={`${dashboardDisplayFont.className} text-xl font-semibold tracking-tight text-slate-950`}>
+                  Doubts in this room
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="db-chip">Visible rows: {doubts.length}</span>
+                <span className="db-chip">Open: {openCount}</span>
+                <span className="db-chip">Cleared: {clearedCount}</span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="table table-zebra table-sm min-w-[1550px] db-table">
+                <thead>
                 <tr>
                   <th>Title</th>
                   <th>Subject</th>
@@ -2031,9 +2164,9 @@ export function DashboardClient() {
                   <th>Updated</th>
                   <th>Action</th>
                 </tr>
-              </thead>
+                </thead>
 
-              <tbody>
+                <tbody>
                 {isLoading ? (
                   Array.from({ length: 6 }).map((_, index) => (
                     <tr key={`skeleton-row-${index}`} className="align-top">
@@ -2074,17 +2207,17 @@ export function DashboardClient() {
                   ))
                 ) : doubts.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center text-sm text-base-content/70">
+                    <td colSpan={9} className="py-10 text-center text-sm text-slate-500">
                       No doubts found for current filters.
                     </td>
                   </tr>
                 ) : (
                   doubts.map((item) => (
-                    <tr key={item.id} className="align-top">
+                    <tr key={item.id} className="db-table-row align-top">
                       <td>
                         <VisibilityProbe onVisible={() => queueThumbnailFetch(item.id)}>
                           <div
-                            className="flex min-w-[220px] items-start gap-2"
+                            className="flex min-w-[220px] items-start gap-3"
                             onMouseEnter={() => queueThumbnailFetch(item.id)}
                             onTouchStart={() => queueThumbnailFetch(item.id)}
                           >
@@ -2114,7 +2247,7 @@ export function DashboardClient() {
                             <div className="min-w-0">
                               <Link
                                 href={`/doubts/${item.id}?room=${item.room_id}`}
-                                className="line-clamp-2 font-semibold hover:text-primary"
+                                className="db-row-title line-clamp-2 font-semibold"
                               >
                                 {item.title}
                               </Link>
@@ -2181,7 +2314,7 @@ export function DashboardClient() {
                         <button
                           type="button"
                           onClick={() => void onToggleCleared(item)}
-                          className={`btn btn-xs ${item.is_cleared ? "btn-success" : "btn-warning"}`}
+                          className={`btn btn-xs ${item.is_cleared ? "btn-success" : "btn-warning"} db-status-toggle`}
                         >
                           {item.is_cleared ? "Cleared" : "Open"}
                         </button>
@@ -2224,8 +2357,9 @@ export function DashboardClient() {
                     </tr>
                   ))
                 )}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </section>
 
           {nextCursor ? (
@@ -2241,18 +2375,24 @@ export function DashboardClient() {
           ) : null}
         </main>
 
-        <aside className="space-y-4 xl:order-1 xl:sticky xl:top-4 xl:self-start">
-          <section className="card border border-base-300 bg-base-100 shadow-sm">
+        <aside className="db-sidebar space-y-4 xl:order-1 xl:sticky xl:top-6 xl:self-start">
+          <section className="card db-card">
             <div className="card-body gap-2 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-base-content/60">
-                Summary
-              </p>
+              <p className="db-kicker">SESSION</p>
+              <h3 className={`${dashboardDisplayFont.className} text-xl font-semibold tracking-tight text-slate-950`}>
+                Quick summary
+              </h3>
               <div className="flex flex-wrap gap-2">
                 <span className="badge badge-outline">Total: {doubts.length}</span>
                 <span className="badge badge-warning badge-outline">Open: {openCount}</span>
                 <span className="badge badge-success badge-outline">Cleared: {clearedCount}</span>
                 <span className="badge badge-outline">Role: {selectedRoom?.role ?? "-"}</span>
               </div>
+              <p className="text-xs leading-5 text-slate-500">
+                {selectedRoom?.is_personal
+                  ? "Personal workspace selected."
+                  : "Shared workspace selected. Changes sync with room members."}
+              </p>
               <button
                 type="button"
                 onClick={onSignOut}
@@ -2263,11 +2403,12 @@ export function DashboardClient() {
             </div>
           </section>
 
-          <section className="card border border-base-300 bg-base-100 shadow-sm">
+          <section className="card db-card">
             <div className="card-body gap-3 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-base-content/60">
-                Workspace
-              </p>
+              <p className="db-kicker">WORKSPACES</p>
+              <h3 className={`${dashboardDisplayFont.className} text-lg font-semibold tracking-tight text-slate-950`}>
+                Switch room
+              </h3>
               {isRoomsLoading ? (
                 <div className="space-y-2">
                   {Array.from({ length: 4 }).map((_, index) => (
@@ -2291,7 +2432,7 @@ export function DashboardClient() {
                         setSelectedRoomId(room.id);
                         updateRoomInUrl(room.id);
                       }}
-                      className={`btn btn-sm w-full justify-between gap-2 ${
+                      className={`btn btn-sm w-full justify-between gap-2 db-room-btn ${
                         selectedRoomId === room.id ? "btn-primary" : "btn-ghost"
                       }`}
                     >
@@ -2307,11 +2448,12 @@ export function DashboardClient() {
             </div>
           </section>
 
-          <section className="card border border-base-300 bg-base-100 shadow-sm">
+          <section className="card db-card">
             <div className="card-body gap-3 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-base-content/60">
-                Workspace settings
-              </p>
+              <p className="db-kicker">ROOM SETTINGS</p>
+              <h3 className={`${dashboardDisplayFont.className} text-lg font-semibold tracking-tight text-slate-950`}>
+                Manage access
+              </h3>
 
               <form onSubmit={onCreateRoom} className="space-y-2">
                 <p className="text-xs text-base-content/70">Create shared room</p>
@@ -2375,7 +2517,7 @@ export function DashboardClient() {
                       ) : null}
                     </div>
                     {inviteData?.code ? (
-                      <code className="block overflow-x-auto rounded-md bg-base-200 p-2 text-xs">
+                      <code className="db-code-block block overflow-x-auto rounded-md p-2 text-xs">
                         {inviteData.code}
                       </code>
                     ) : (
@@ -2420,10 +2562,12 @@ export function DashboardClient() {
       </div>
 
       {isExportModalOpen ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box w-11/12 max-w-5xl">
+        <dialog className="modal modal-open db-export-modal">
+          <div className="modal-box db-modal-box w-11/12 max-w-5xl">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-lg font-semibold">Export doubts to PDF</h3>
+              <h3 className={`${dashboardDisplayFont.className} text-2xl font-semibold tracking-tight text-slate-950`}>
+                Export doubts to PDF
+              </h3>
               <button
                 type="button"
                 onClick={onCloseExportModal}

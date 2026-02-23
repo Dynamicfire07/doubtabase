@@ -7,7 +7,7 @@ export default async function DashboardPage() {
   await requirePageUser();
 
   return (
-    <main className="min-h-screen bg-base-200">
+    <main className="dashboard-page min-h-screen">
       <DashboardClient />
     </main>
   );
