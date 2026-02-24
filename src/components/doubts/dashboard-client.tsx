@@ -440,6 +440,9 @@ export function DashboardClient() {
   const [exportFilterDraft, setExportFilterDraft] = useState<FilterDraft>(
     initialFilterDraft,
   );
+  const [isCapturePanelOpen, setIsCapturePanelOpen] = useState(true);
+  const [isFiltersPanelOpen, setIsFiltersPanelOpen] = useState(false);
+  const [isWorkspaceToolsOpen, setIsWorkspaceToolsOpen] = useState(false);
 
   const selectedRoom = useMemo(
     () => rooms.find((room) => room.id === selectedRoomId) ?? null,
@@ -1726,97 +1729,77 @@ export function DashboardClient() {
       <div className="db-bg-orb db-bg-orb-c pointer-events-none absolute bottom-10 left-1/3" />
 
       <section className="db-hero card border-0 shadow-none">
-        <div className="card-body gap-5 p-0">
-          <div className="db-panel flex flex-col gap-4 rounded-[26px] p-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-3">
-                <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-white/70 bg-white shadow-sm">
-                  <Image
-                    src={publicAssetUrl("/brand-icon.svg")}
-                    alt="Doubts App logo"
-                    fill
-                    className="object-contain p-1"
-                    priority
-                  />
+        <div className="card-body p-0">
+          <div className="db-panel flex flex-col gap-4 rounded-[20px] p-4 sm:p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-3">
+                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-white/70 bg-white shadow-sm">
+                    <Image
+                      src={publicAssetUrl("/brand-icon.svg")}
+                      alt="Doubts App logo"
+                      fill
+                      className="object-contain p-1"
+                      priority
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="db-kicker">DASHBOARD</p>
+                    <h1
+                      className={`${dashboardDisplayFont.className} db-display-title text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl`}
+                    >
+                      Doubt Sheet
+                    </h1>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="db-kicker">DATABASE WORKSPACE</p>
-                  <h1
-                    className={`${dashboardDisplayFont.className} db-display-title text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl`}
-                  >
-                    Doubt Sheet
-                  </h1>
-                </div>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+                  Capture quickly, filter only when needed, and keep room tools out of the
+                  way until you need them.
+                </p>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="db-chip db-chip-strong">
-                  {selectedRoom?.name ?? "No room selected"}
-                </span>
-                <span className="db-chip">
-                  {selectedRoom?.is_personal ? "Personal room" : "Shared room"}
-                </span>
-                <span className="db-chip">Role: {selectedRoom?.role ?? "-"}</span>
-                {activeFilterCount > 0 ? (
-                  <span className="db-chip db-chip-accent">
-                    {activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}
-                  </span>
-                ) : null}
-                {editingId ? (
-                  <span className="db-chip db-chip-warn">Editing row in progress</span>
-                ) : null}
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void fetchDoubts(undefined, false, { fresh: true })}
+                  disabled={!selectedRoomId || isLoading}
+                  className="btn btn-sm btn-outline"
+                >
+                  {isLoading ? "Refreshing..." : "Refresh"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onOpenExportModal()}
+                  disabled={!selectedRoomId}
+                  className="btn btn-sm btn-secondary"
+                >
+                  Export PDF
+                </button>
               </div>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                A cleaner, faster database for capturing doubts, tagging patterns,
-                and tracking what is still open.
-              </p>
             </div>
 
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void onOpenExportModal()}
-                disabled={!selectedRoomId}
-                className="btn btn-sm btn-secondary"
-              >
-                Export PDF
-              </button>
-              <button
-                type="button"
-                onClick={() => void fetchDoubts(undefined, false, { fresh: true })}
-                disabled={!selectedRoomId || isLoading}
-                className="btn btn-sm btn-outline"
-              >
-                {isLoading ? "Refreshing..." : "Refresh"}
-              </button>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="db-stat-card">
-              <p className="db-kicker">Total rows</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-950">{doubts.length}</p>
-              <p className="text-xs text-slate-500">Loaded in current room + filters</p>
-            </div>
-            <div className="db-stat-card">
-              <p className="db-kicker">Open</p>
-              <p className="mt-2 text-2xl font-semibold text-amber-700">{openCount}</p>
-              <p className="text-xs text-slate-500">Still unresolved</p>
-            </div>
-            <div className="db-stat-card">
-              <p className="db-kicker">Cleared</p>
-              <p className="mt-2 text-2xl font-semibold text-emerald-700">{clearedCount}</p>
-              <p className="text-xs text-slate-500">Marked solved</p>
-            </div>
-            <div className="db-stat-card">
-              <p className="db-kicker">Workspace</p>
-              <p className="mt-2 line-clamp-1 text-xl font-semibold text-slate-950">
-                {selectedRoom?.name ?? "-"}
-              </p>
-              <p className="text-xs text-slate-500">
-                {selectedRoom?.member_count ?? 0} member
-                {(selectedRoom?.member_count ?? 0) === 1 ? "" : "s"}
-              </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="db-chip db-chip-strong">
+                {selectedRoom?.name ?? "No room selected"}
+              </span>
+              <span className="db-chip">
+                {selectedRoom?.is_personal ? "Personal" : "Shared"}
+              </span>
+              <span className="db-chip">Role: {selectedRoom?.role ?? "-"}</span>
+              <span className="db-chip">Rows: {doubts.length}</span>
+              <span className="db-chip">Open: {openCount}</span>
+              <span className="db-chip">Cleared: {clearedCount}</span>
+              <span className="db-chip">
+                Members: {selectedRoom?.member_count ?? 0}
+              </span>
+              {activeFilterCount > 0 ? (
+                <span className="db-chip db-chip-accent">
+                  {activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}
+                </span>
+              ) : null}
+              {editingId ? (
+                <span className="db-chip db-chip-warn">Editing row</span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1832,24 +1815,42 @@ export function DashboardClient() {
         </div>
       ) : null}
 
-      <div className="db-layout-grid mt-4 grid gap-4 xl:grid-cols-[330px_minmax(0,1fr)]">
-        <main className="min-w-0 space-y-4 xl:order-2">
+      <div className="db-layout-grid mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <main className="min-w-0 space-y-4">
           <section className="card db-card db-card-accent">
             <div className="card-body gap-3 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className={`${dashboardDisplayFont.className} text-xl font-semibold tracking-tight text-slate-950`}>
-                  Add Question
-                </h2>
-                <span className="db-chip db-chip-soft">
-                  Ctrl/Cmd + Enter saves from anywhere in this form
-                </span>
+                <div>
+                  <h2
+                    className={`${dashboardDisplayFont.className} text-xl font-semibold tracking-tight text-slate-950`}
+                  >
+                    Add Question
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Main capture form. Hide it when you want to focus on the table.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="db-chip db-chip-soft">
+                    Ctrl/Cmd + Enter saves
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsCapturePanelOpen((current) => !current)}
+                    className="btn btn-ghost btn-sm"
+                    aria-expanded={isCapturePanelOpen}
+                  >
+                    {isCapturePanelOpen ? "Hide form" : "Show form"}
+                  </button>
+                </div>
               </div>
 
-              <form
-                onSubmit={onAddRow}
-                onKeyDown={onAddRowShortcut}
-                className="db-form-grid grid gap-2 md:grid-cols-2 xl:grid-cols-12"
-              >
+              {isCapturePanelOpen ? (
+                <form
+                  onSubmit={onAddRow}
+                  onKeyDown={onAddRowShortcut}
+                  className="db-form-grid grid gap-2 md:grid-cols-2 xl:grid-cols-12"
+                >
                 <div className="md:col-span-2 xl:col-span-2">
                   <label className="label py-1">
                     <span className="label-text text-xs">Title</span>
@@ -2027,7 +2028,13 @@ export function DashboardClient() {
                     ) : null}
                   </div>
                 </div>
-              </form>
+                </form>
+              ) : (
+                <div className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-sm text-slate-600">
+                  Capture form hidden. Use the Show form button when you want to add
+                  or edit a row.
+                </div>
+              )}
             </div>
           </section>
 
@@ -2035,18 +2042,29 @@ export function DashboardClient() {
             <div className="card-body p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="db-kicker">FILTERS + ACTIONS</p>
+                  <p className="db-kicker">FILTERS</p>
                   <p className="text-sm text-slate-600">
-                    Narrow the database, reset quickly, or export the current room.
+                    Hide this section when you want a cleaner reading view.
                   </p>
                 </div>
-                <div className="db-chip db-chip-soft">
-                  {appliedFilters.q || appliedFilters.subject || appliedFilters.is_cleared
-                    ? "Filters applied"
-                    : "No filters applied"}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="db-chip db-chip-soft">
+                    {appliedFilters.q || appliedFilters.subject || appliedFilters.is_cleared
+                      ? "Filters applied"
+                      : "No filters applied"}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsFiltersPanelOpen((current) => !current)}
+                    className="btn btn-ghost btn-sm"
+                    aria-expanded={isFiltersPanelOpen}
+                  >
+                    {isFiltersPanelOpen ? "Hide filters" : "Show filters"}
+                  </button>
                 </div>
               </div>
-              <div className="flex flex-wrap items-end gap-2">
+              {isFiltersPanelOpen ? (
+                <div className="flex flex-wrap items-end gap-2">
                 <div className="min-w-[220px] flex-1">
                   <label className="label pb-1">
                     <span className="label-text text-xs">Search</span>
@@ -2122,16 +2140,16 @@ export function DashboardClient() {
                 >
                   Reset
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => void onOpenExportModal()}
-                  disabled={!selectedRoomId}
-                  className="btn btn-sm btn-secondary"
-                >
-                  Export PDF
-                </button>
-              </div>
+                </div>
+              ) : activeFilterCount > 0 ? (
+                <p className="text-sm text-slate-600">
+                  {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"} active.
+                </p>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  No filters active.
+                </p>
+              )}
             </div>
           </section>
 
@@ -2329,7 +2347,7 @@ export function DashboardClient() {
                       </td>
 
                       <td>
-                        <div className="flex flex-col gap-1">
+                        <div className="flex max-w-[180px] flex-wrap gap-1">
                           <button
                             type="button"
                             onClick={() => startEdit(item)}
@@ -2375,12 +2393,12 @@ export function DashboardClient() {
           ) : null}
         </main>
 
-        <aside className="db-sidebar space-y-4 xl:order-1 xl:sticky xl:top-6 xl:self-start">
+        <aside className="db-sidebar space-y-4 xl:sticky xl:top-6 xl:self-start">
           <section className="card db-card">
             <div className="card-body gap-2 p-3">
               <p className="db-kicker">SESSION</p>
               <h3 className={`${dashboardDisplayFont.className} text-xl font-semibold tracking-tight text-slate-950`}>
-                Quick summary
+                Workspace summary
               </h3>
               <div className="flex flex-wrap gap-2">
                 <span className="badge badge-outline">Total: {doubts.length}</span>
@@ -2450,11 +2468,27 @@ export function DashboardClient() {
 
           <section className="card db-card">
             <div className="card-body gap-3 p-3">
-              <p className="db-kicker">ROOM SETTINGS</p>
-              <h3 className={`${dashboardDisplayFont.className} text-lg font-semibold tracking-tight text-slate-950`}>
-                Manage access
-              </h3>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="db-kicker">ROOM TOOLS</p>
+                  <h3
+                    className={`${dashboardDisplayFont.className} text-lg font-semibold tracking-tight text-slate-950`}
+                  >
+                    Manage access
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsWorkspaceToolsOpen((current) => !current)}
+                  className="btn btn-ghost btn-sm"
+                  aria-expanded={isWorkspaceToolsOpen}
+                >
+                  {isWorkspaceToolsOpen ? "Hide tools" : "Show tools"}
+                </button>
+              </div>
 
+              {isWorkspaceToolsOpen ? (
+                <>
               <form onSubmit={onCreateRoom} className="space-y-2">
                 <p className="text-xs text-base-content/70">Create shared room</p>
                 <div className="flex gap-2">
@@ -2556,6 +2590,13 @@ export function DashboardClient() {
                   </div>
                 )}
               </div>
+                </>
+              ) : (
+                <p className="text-sm text-slate-600">
+                  Room creation, joining, invite rotation, and member management are hidden by
+                  default to keep navigation cleaner.
+                </p>
+              )}
             </div>
           </section>
         </aside>

@@ -451,11 +451,7 @@ a {
 }
 
 .dashboard-page {
-  background:
-    radial-gradient(circle at 8% 10%, rgba(14, 165, 233, 0.1), transparent 34%),
-    radial-gradient(circle at 92% 12%, rgba(251, 191, 36, 0.11), transparent 38%),
-    radial-gradient(circle at 50% 80%, rgba(16, 185, 129, 0.08), transparent 45%),
-    linear-gradient(180deg, #f5f6f8 0%, #edf3fb 52%, #e8eef8 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
 }
 
 .db-shell {
@@ -464,6 +460,7 @@ a {
 }
 
 .db-bg-orb {
+  display: none;
   width: 18rem;
   height: 18rem;
   border-radius: 999px;
@@ -501,31 +498,21 @@ a {
 }
 
 .db-panel {
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.68));
-  box-shadow:
-    0 26px 42px -34px rgba(15, 23, 42, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(14px);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 20px -18px rgba(15, 23, 42, 0.2);
 }
 
 .db-card {
   border-radius: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.88));
-  box-shadow:
-    0 24px 40px -34px rgba(15, 23, 42, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 18px -16px rgba(15, 23, 42, 0.16);
 }
 
 .db-card-accent {
-  border-color: rgba(14, 165, 233, 0.18);
-  background:
-    radial-gradient(circle at 0% 0%, rgba(14, 165, 233, 0.08), transparent 46%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.9));
+  border-color: rgba(186, 230, 253, 0.9);
+  background: rgba(248, 252, 255, 0.96);
 }
 
 .db-stat-card {
@@ -554,16 +541,15 @@ a {
 
 .db-chip {
   align-items: center;
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border: 1px solid rgba(203, 213, 225, 0.9);
   border-radius: 999px;
   color: #334155;
   display: inline-flex;
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
-  padding: 0.48rem 0.75rem;
-  background: rgba(255, 255, 255, 0.75);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  padding: 0.42rem 0.7rem;
+  background: #fff;
 }
 
 .db-chip-strong {
@@ -663,21 +649,17 @@ a {
   border-color: rgba(148, 163, 184, 0.28);
   color: #0f172a;
   font-weight: 600;
-  box-shadow:
-    0 10px 18px -16px rgba(15, 23, 42, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  box-shadow: none;
   transition:
-    transform 160ms ease,
+    transform 120ms ease,
     box-shadow 160ms ease,
     background-color 160ms ease,
     border-color 160ms ease;
 }
 
 .db-shell .btn:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    0 14px 24px -18px rgba(15, 23, 42, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  transform: none;
+  box-shadow: none;
 }
 
 .db-shell .btn:active {
@@ -701,8 +683,8 @@ a {
 }
 
 .db-shell .btn-ghost {
-  border-color: transparent;
-  background: rgba(241, 245, 249, 0.65);
+  border-color: rgba(226, 232, 240, 0.85);
+  background: rgba(248, 250, 252, 0.95);
   color: #334155;
 }
 
@@ -797,8 +779,7 @@ a {
 }
 
 .db-table-toolbar {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(248, 250, 252, 0.78));
+  background: rgba(248, 250, 252, 0.92);
 }
 
 .db-table {
@@ -826,7 +807,7 @@ a {
 }
 
 .db-table.table-zebra tbody tr:nth-child(even) {
-  background: rgba(248, 250, 252, 0.65);
+  background: rgba(248, 250, 252, 0.4);
 }
 
 .db-table-row:hover {
