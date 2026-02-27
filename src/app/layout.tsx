@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import Link from "next/link";
 
 import { getCdnPreconnectOrigins, publicAssetUrl } from "@/lib/cdn";
 import "./globals.css";
@@ -40,7 +41,16 @@ export default function RootLayout({
       >
         <div className="flex-1">{children}</div>
         <footer className="border-t border-base-300 bg-base-100/80 px-6 py-4 text-center text-sm text-base-content/70">
-          Made by Shaurya Jain
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <span>Made by Shaurya Jain</span>
+            <span aria-hidden="true">•</span>
+            <Link
+              href="/privacy-policy"
+              className="underline underline-offset-2 hover:text-base-content"
+            >
+              Privacy Policy
+            </Link>
+          </div>
         </footer>
         {process.env.NODE_ENV === "production" ? <Analytics /> : null}
       </body>
