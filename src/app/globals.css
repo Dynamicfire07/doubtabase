@@ -880,3 +880,89 @@ a {
 .db-shell .alert-error {
   border-color: rgba(254, 202, 202, 0.85);
 }
+
+.auth-shell {
+  color: #0f172a;
+}
+
+.auth-panel {
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.84));
+  box-shadow:
+    0 30px 60px -42px rgba(15, 23, 42, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px);
+}
+
+.auth-form .label-text {
+  color: rgba(71, 85, 105, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.auth-form .input,
+.auth-form .checkbox,
+.auth-form .btn {
+  border-radius: 0.95rem;
+}
+
+.auth-form .input {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 12px 24px -24px rgba(15, 23, 42, 0.34);
+}
+
+.auth-form .btn {
+  border-color: rgba(148, 163, 184, 0.22);
+  font-weight: 600;
+}
+
+.auth-form .btn-primary {
+  border-color: rgba(2, 132, 199, 0.25);
+  color: #fff;
+  background: linear-gradient(135deg, #0f172a 0%, #0b5f88 55%, #0284c7 100%);
+}
+
+.auth-form .btn-outline {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.detail-page {
+  background:
+    radial-gradient(circle at 8% 10%, rgba(14, 165, 233, 0.1), transparent 32%),
+    radial-gradient(circle at 90% 18%, rgba(251, 191, 36, 0.08), transparent 30%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+}
+
+.detail-shell {
+  color: #0f172a;
+}
+
+.detail-card {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 250, 252, 0.94));
+  box-shadow: 0 24px 50px -42px rgba(15, 23, 42, 0.38);
+}
+
+.detail-section-card {
+  border: 1px solid rgba(226, 232, 240, 0.82);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 16px 34px -32px rgba(15, 23, 42, 0.28);
+}
+
+.detail-chip {
+  align-items: center;
+  border: 1px solid rgba(203, 213, 225, 0.85);
+  border-radius: 999px;
+  color: #334155;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 0.48rem 0.72rem;
+  background: rgba(255, 255, 255, 0.86);
+}

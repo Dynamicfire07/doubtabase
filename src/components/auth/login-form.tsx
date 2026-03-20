@@ -21,7 +21,7 @@ export function LoginForm() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const callbackError = getAuthErrorMessage(searchParams.get("error"));
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => readCachedLoginEmail() ?? "");
   const [password, setPassword] = useState("");
   const [rememberEmail, setRememberEmail] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,12 +30,6 @@ export function LoginForm() {
 
   useEffect(() => {
     let isMounted = true;
-    const cachedEmail = readCachedLoginEmail();
-
-    if (cachedEmail) {
-      setEmail((currentEmail) => currentEmail || cachedEmail);
-    }
-
     if (hasCachedLoginSessionHint()) {
       void router.prefetch("/dashboard");
     }
@@ -127,7 +121,7 @@ export function LoginForm() {
 
   return (
     <motion.form
-      className="space-y-4"
+      className="auth-form space-y-4"
       onSubmit={onSubmit}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -243,9 +237,9 @@ export function LoginForm() {
         {isSubmitting ? "Signing in..." : "Sign in"}
       </motion.button>
 
-      <p className="text-center text-sm text-base-content/70">
+      <p className="text-center text-sm text-slate-600">
         New here?{" "}
-        <Link href="/signup" className="link link-primary">
+        <Link href="/signup" className="font-medium text-sky-700 underline underline-offset-4">
           Create an account
         </Link>
       </p>

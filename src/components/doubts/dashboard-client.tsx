@@ -1342,10 +1342,10 @@ export function DashboardClient() {
 
         if (filesToUpload.length > 0) {
           await uploadFiles(data.item.id, filesToUpload);
+          void fetchDoubts(undefined, false, { fresh: true });
         }
 
         clearRowSyncing(data.item.id);
-        void fetchDoubts(undefined, false, { fresh: true });
       } catch (submissionError) {
         const message =
           submissionError instanceof Error
@@ -1410,8 +1410,9 @@ export function DashboardClient() {
       return;
     }
 
+    const data = (await response.json()) as { item: Doubt };
+    upsertLocalDoubt(data.item);
     clearRowSyncing(item.id);
-    void fetchDoubts(undefined, false, { fresh: true });
   }
 
   async function onDelete(item: Doubt) {
@@ -1448,7 +1449,6 @@ export function DashboardClient() {
     }
 
     clearRowSyncing(item.id);
-    void fetchDoubts(undefined, false, { fresh: true });
   }
 
   async function onCreateRoom(event: FormEvent<HTMLFormElement>) {
@@ -1730,8 +1730,8 @@ export function DashboardClient() {
 
       <section className="db-hero card border-0 shadow-none">
         <div className="card-body p-0">
-          <div className="db-panel flex flex-col gap-4 rounded-[20px] p-4 sm:p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="db-panel flex flex-col gap-5 rounded-[24px] p-5 sm:p-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-3">
                   <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-white/70 bg-white shadow-sm">
@@ -1746,15 +1746,16 @@ export function DashboardClient() {
                   <div className="min-w-0">
                     <p className="db-kicker">DASHBOARD</p>
                     <h1
-                      className={`${dashboardDisplayFont.className} db-display-title text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl`}
+                      className={`${dashboardDisplayFont.className} db-display-title text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl`}
                     >
-                      Doubt Sheet
+                      Doubt control room
                     </h1>
                   </div>
                 </div>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-                  Capture quickly, filter only when needed, and keep room tools out of the
-                  way until you need them.
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-[15px]">
+                  Keep capture fast, keep the live list readable, and push workspace
+                  management into side panels instead of turning the whole screen into a tool
+                  wall.
                 </p>
               </div>
 
@@ -1775,31 +1776,55 @@ export function DashboardClient() {
                 >
                   Export PDF
                 </button>
+                <button
+                  type="button"
+                  onClick={onSignOut}
+                  className="btn btn-sm btn-ghost"
+                >
+                  Sign out
+                </button>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="db-chip db-chip-strong">
-                {selectedRoom?.name ?? "No room selected"}
-              </span>
-              <span className="db-chip">
-                {selectedRoom?.is_personal ? "Personal" : "Shared"}
-              </span>
-              <span className="db-chip">Role: {selectedRoom?.role ?? "-"}</span>
-              <span className="db-chip">Rows: {doubts.length}</span>
-              <span className="db-chip">Open: {openCount}</span>
-              <span className="db-chip">Cleared: {clearedCount}</span>
-              <span className="db-chip">
-                Members: {selectedRoom?.member_count ?? 0}
-              </span>
-              {activeFilterCount > 0 ? (
-                <span className="db-chip db-chip-accent">
-                  {activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}
-                </span>
-              ) : null}
-              {editingId ? (
-                <span className="db-chip db-chip-warn">Editing row</span>
-              ) : null}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="db-stat-card">
+                <p className="db-kicker">Current room</p>
+                <p className="mt-2 text-lg font-semibold text-slate-950">
+                  {selectedRoom?.name ?? "No room selected"}
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {selectedRoom?.is_personal ? "Personal space" : "Shared workspace"} • Role{" "}
+                  {selectedRoom?.role ?? "-"}
+                </p>
+              </div>
+              <div className="db-stat-card">
+                <p className="db-kicker">Open doubts</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-950">{openCount}</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {doubts.length} visible row{doubts.length === 1 ? "" : "s"} in this view
+                </p>
+              </div>
+              <div className="db-stat-card">
+                <p className="db-kicker">Cleared</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-950">{clearedCount}</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {selectedRoom?.member_count ?? 0} member
+                  {(selectedRoom?.member_count ?? 0) === 1 ? "" : "s"} in room
+                </p>
+              </div>
+              <div className="db-stat-card">
+                <p className="db-kicker">View state</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {activeFilterCount > 0 ? (
+                    <span className="db-chip db-chip-accent">
+                      {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"}
+                    </span>
+                  ) : (
+                    <span className="db-chip db-chip-soft">No filters</span>
+                  )}
+                  {editingId ? <span className="db-chip db-chip-warn">Editing row</span> : null}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1815,351 +1840,357 @@ export function DashboardClient() {
         </div>
       ) : null}
 
-      <div className="db-layout-grid mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="db-layout-grid mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <main className="min-w-0 space-y-4">
-          <section className="card db-card db-card-accent">
-            <div className="card-body gap-3 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h2
-                    className={`${dashboardDisplayFont.className} text-xl font-semibold tracking-tight text-slate-950`}
-                  >
-                    Add Question
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Main capture form. Hide it when you want to focus on the table.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="db-chip db-chip-soft">
-                    Ctrl/Cmd + Enter saves
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsCapturePanelOpen((current) => !current)}
-                    className="btn btn-ghost btn-sm"
-                    aria-expanded={isCapturePanelOpen}
-                  >
-                    {isCapturePanelOpen ? "Hide form" : "Show form"}
-                  </button>
-                </div>
-              </div>
-
-              {isCapturePanelOpen ? (
-                <form
-                  onSubmit={onAddRow}
-                  onKeyDown={onAddRowShortcut}
-                  className="db-form-grid grid gap-2 md:grid-cols-2 xl:grid-cols-12"
-                >
-                <div className="md:col-span-2 xl:col-span-2">
-                  <label className="label py-1">
-                    <span className="label-text text-xs">Title</span>
-                  </label>
-                  <input
-                    required
-                    value={draftRow.title}
-                    onChange={(event) =>
-                      setDraftRow((current) => ({
-                        ...current,
-                        title: event.target.value,
-                      }))
-                    }
-                    className="input input-bordered input-sm w-full"
-                    placeholder="Why is this wrong?"
-                  />
-                </div>
-
-                <div className="xl:col-span-1">
-                  <label className="label py-1">
-                    <span className="label-text text-xs">Subject</span>
-                  </label>
-                  <input
-                    required
-                    value={draftRow.subject}
-                    list="subject-add-suggestions"
-                    onChange={(event) =>
-                      setDraftRow((current) => ({
-                        ...current,
-                        subject: event.target.value,
-                      }))
-                    }
-                    className="input input-bordered input-sm w-full"
-                    placeholder="Math"
-                  />
-                  <datalist id="subject-add-suggestions">
-                    {suggestions.subjects.map((subject) => (
-                      <option key={subject} value={subject} />
-                    ))}
-                  </datalist>
-                </div>
-
-                <div className="xl:col-span-2">
-                  <label className="label py-1">
-                    <span className="label-text text-xs">Subtopics</span>
-                  </label>
-                  <input
-                    value={draftRow.subtopicsCsv}
-                    onChange={(event) =>
-                      setDraftRow((current) => ({
-                        ...current,
-                        subtopicsCsv: event.target.value,
-                      }))
-                    }
-                    className="input input-bordered input-sm w-full"
-                    placeholder="limits, lhopital"
-                  />
-                </div>
-
-                <div className="xl:col-span-1">
-                  <label className="label py-1">
-                    <span className="label-text text-xs">Difficulty</span>
-                  </label>
-                  <select
-                    value={draftRow.difficulty}
-                    onChange={(event) =>
-                      setDraftRow((current) => ({
-                        ...current,
-                        difficulty: event.target.value as Difficulty,
-                      }))
-                    }
-                    className="select select-bordered select-sm w-full"
-                  >
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
-                  </select>
-                </div>
-
-                <div className="xl:col-span-2">
-                  <label className="label py-1">
-                    <span className="label-text text-xs">Errors</span>
-                  </label>
-                  <input
-                    value={draftRow.errorTagsCsv}
-                    onChange={(event) =>
-                      setDraftRow((current) => ({
-                        ...current,
-                        errorTagsCsv: event.target.value,
-                      }))
-                    }
-                    className="input input-bordered input-sm w-full"
-                    placeholder="sign mistake, wrong identity"
-                  />
-                </div>
-
-                <div className="xl:col-span-1">
-                  <label className="label py-1">
-                    <span className="label-text text-xs">Cleared</span>
-                  </label>
-                  <div className="flex h-8 items-center">
-                    <input
-                      type="checkbox"
-                      checked={draftRow.isCleared}
-                      onChange={(event) =>
-                        setDraftRow((current) => ({
-                          ...current,
-                          isCleared: event.target.checked,
-                        }))
-                      }
-                      className="checkbox checkbox-sm"
-                    />
+          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+            <section className="card db-card db-card-accent">
+              <div className="card-body gap-3 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="db-kicker">CAPTURE</p>
+                    <h2
+                      className={`${dashboardDisplayFont.className} text-xl font-semibold tracking-tight text-slate-950`}
+                    >
+                      {editingId ? "Refine the selected doubt" : "Add a new doubt"}
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                      Keep the form compact. Add tags only when they help retrieval.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="db-chip db-chip-soft">Cmd/Ctrl + Enter saves</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsCapturePanelOpen((current) => !current)}
+                      className="btn btn-ghost btn-sm"
+                      aria-expanded={isCapturePanelOpen}
+                    >
+                      {isCapturePanelOpen ? "Collapse" : "Expand"}
+                    </button>
                   </div>
                 </div>
 
-                <div className="md:col-span-2 xl:col-span-2">
-                  <label className="label py-1">
-                    <span className="label-text text-xs">Notes</span>
-                  </label>
-                  <input
-                    required
-                    value={draftRow.notes}
-                    onChange={(event) =>
-                      setDraftRow((current) => ({
-                        ...current,
-                        notes: event.target.value,
-                      }))
-                    }
-                    className="input input-bordered input-sm w-full"
-                    placeholder="Quick plain-text note"
-                  />
-                </div>
+                {isCapturePanelOpen ? (
+                  <form
+                    onSubmit={onAddRow}
+                    onKeyDown={onAddRowShortcut}
+                    className="db-form-grid grid gap-3 md:grid-cols-2 xl:grid-cols-12"
+                  >
+                    <div className="md:col-span-2 xl:col-span-4">
+                      <label className="label py-1">
+                        <span className="label-text text-xs">Title</span>
+                      </label>
+                      <input
+                        required
+                        value={draftRow.title}
+                        onChange={(event) =>
+                          setDraftRow((current) => ({
+                            ...current,
+                            title: event.target.value,
+                          }))
+                        }
+                        className="input input-bordered input-sm w-full"
+                        placeholder="What exactly is confusing here?"
+                      />
+                    </div>
 
-                <div className="md:col-span-1 xl:col-span-1">
-                  <label className="label py-1">
-                    <span className="label-text text-xs">Images</span>
-                  </label>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={onFileChange}
-                    className="file-input file-input-bordered file-input-sm w-full file:text-center"
-                  />
-                  {selectedFiles.length > 0 ? (
-                    <p className="mt-1 text-xs text-base-content/70">
-                      {selectedFiles.length} file(s)
-                    </p>
-                  ) : null}
-                </div>
+                    <div className="xl:col-span-2">
+                      <label className="label py-1">
+                        <span className="label-text text-xs">Subject</span>
+                      </label>
+                      <input
+                        required
+                        value={draftRow.subject}
+                        list="subject-add-suggestions"
+                        onChange={(event) =>
+                          setDraftRow((current) => ({
+                            ...current,
+                            subject: event.target.value,
+                          }))
+                        }
+                        className="input input-bordered input-sm w-full"
+                        placeholder="Math"
+                      />
+                      <datalist id="subject-add-suggestions">
+                        {suggestions.subjects.map((subject) => (
+                          <option key={subject} value={subject} />
+                        ))}
+                      </datalist>
+                    </div>
 
-                <div className="md:col-span-1 xl:col-span-12">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="submit"
-                      disabled={isSubmitting || !selectedRoomId}
-                      className="btn btn-primary btn-sm"
+                    <div className="xl:col-span-2">
+                      <label className="label py-1">
+                        <span className="label-text text-xs">Subtopics</span>
+                      </label>
+                      <input
+                        value={draftRow.subtopicsCsv}
+                        onChange={(event) =>
+                          setDraftRow((current) => ({
+                            ...current,
+                            subtopicsCsv: event.target.value,
+                          }))
+                        }
+                        className="input input-bordered input-sm w-full"
+                        placeholder="limits, lhopital"
+                      />
+                    </div>
+
+                    <div className="xl:col-span-2">
+                      <label className="label py-1">
+                        <span className="label-text text-xs">Errors</span>
+                      </label>
+                      <input
+                        value={draftRow.errorTagsCsv}
+                        onChange={(event) =>
+                          setDraftRow((current) => ({
+                            ...current,
+                            errorTagsCsv: event.target.value,
+                          }))
+                        }
+                        className="input input-bordered input-sm w-full"
+                        placeholder="sign mistake, wrong identity"
+                      />
+                    </div>
+
+                    <div className="xl:col-span-2">
+                      <label className="label py-1">
+                        <span className="label-text text-xs">Difficulty</span>
+                      </label>
+                      <select
+                        value={draftRow.difficulty}
+                        onChange={(event) =>
+                          setDraftRow((current) => ({
+                            ...current,
+                            difficulty: event.target.value as Difficulty,
+                          }))
+                        }
+                        className="select select-bordered select-sm w-full"
+                      >
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                      </select>
+                    </div>
+
+                    <div className="md:col-span-2 xl:col-span-9">
+                      <label className="label py-1">
+                        <span className="label-text text-xs">Notes</span>
+                      </label>
+                      <input
+                        required
+                        value={draftRow.notes}
+                        onChange={(event) =>
+                          setDraftRow((current) => ({
+                            ...current,
+                            notes: event.target.value,
+                          }))
+                        }
+                        className="input input-bordered input-sm w-full"
+                        placeholder="Quick plain-text note"
+                      />
+                    </div>
+
+                    <div className="xl:col-span-1">
+                      <label className="label py-1">
+                        <span className="label-text text-xs">Cleared</span>
+                      </label>
+                      <div className="flex h-9 items-center">
+                        <input
+                          type="checkbox"
+                          checked={draftRow.isCleared}
+                          onChange={(event) =>
+                            setDraftRow((current) => ({
+                              ...current,
+                              isCleared: event.target.checked,
+                            }))
+                          }
+                          className="checkbox checkbox-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-2 xl:col-span-6">
+                      <label className="label py-1">
+                        <span className="label-text text-xs">Images</span>
+                      </label>
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={onFileChange}
+                        className="file-input file-input-bordered file-input-sm w-full file:text-center"
+                      />
+                      {selectedFiles.length > 0 ? (
+                        <p className="mt-1 text-xs text-base-content/70">
+                          {selectedFiles.length} file(s) selected
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="md:col-span-2 xl:col-span-6">
+                      <div className="flex h-full flex-wrap items-end gap-2">
+                        <button
+                          type="submit"
+                          disabled={isSubmitting || !selectedRoomId}
+                          className="btn btn-primary btn-sm"
+                        >
+                          {isSubmitting
+                            ? editingId
+                              ? "Saving..."
+                              : "Adding..."
+                            : editingId
+                              ? "Save changes"
+                              : "Add doubt"}
+                        </button>
+                        {editingId ? (
+                          <button
+                            type="button"
+                            onClick={resetDraftRow}
+                            className="btn btn-ghost btn-sm"
+                          >
+                            Cancel edit
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-sm text-slate-600">
+                    Capture form hidden. Expand it when you want to add or edit a doubt.
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="card db-card">
+              <div className="card-body p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="db-kicker">FILTERS</p>
+                    <h2
+                      className={`${dashboardDisplayFont.className} text-xl font-semibold tracking-tight text-slate-950`}
                     >
-                      {isSubmitting
-                        ? editingId
-                          ? "Saving..."
-                          : "Adding..."
-                        : editingId
-                          ? "Save Row"
-                          : "Add Row"}
+                      Tighten the view
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                      Keep filtering explicit so the main list stays readable.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="db-chip db-chip-soft">
+                      {activeFilterCount > 0 ? "Focused view" : "Wide view"}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsFiltersPanelOpen((current) => !current)}
+                      className="btn btn-ghost btn-sm"
+                      aria-expanded={isFiltersPanelOpen}
+                    >
+                      {isFiltersPanelOpen ? "Collapse" : "Expand"}
                     </button>
-                    {editingId ? (
+                  </div>
+                </div>
+                {isFiltersPanelOpen ? (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                    <div className="md:col-span-2 xl:col-span-3">
+                      <label className="label pb-1">
+                        <span className="label-text text-xs">Search</span>
+                      </label>
+                      <input
+                        value={filterDraft.q}
+                        onChange={(event) =>
+                          setFilterDraft((current) => ({ ...current, q: event.target.value }))
+                        }
+                        className="input input-bordered input-sm w-full"
+                        placeholder="Title, note, subtopic, or error tag"
+                      />
+                    </div>
+
+                    <div className="xl:col-span-2">
+                      <label className="label pb-1">
+                        <span className="label-text text-xs">Subject</span>
+                      </label>
+                      <input
+                        value={filterDraft.subject}
+                        list="subject-filter-suggestions"
+                        onChange={(event) =>
+                          setFilterDraft((current) => ({
+                            ...current,
+                            subject: event.target.value,
+                          }))
+                        }
+                        className="input input-bordered input-sm w-full"
+                        placeholder="Any subject"
+                      />
+                      <datalist id="subject-filter-suggestions">
+                        {suggestions.subjects.map((subject) => (
+                          <option key={subject} value={subject} />
+                        ))}
+                      </datalist>
+                    </div>
+
+                    <div className="xl:col-span-1">
+                      <label className="label pb-1">
+                        <span className="label-text text-xs">Status</span>
+                      </label>
+                      <select
+                        value={filterDraft.is_cleared}
+                        onChange={(event) =>
+                          setFilterDraft((current) => ({
+                            ...current,
+                            is_cleared: event.target.value as FilterDraft["is_cleared"],
+                          }))
+                        }
+                        className="select select-bordered select-sm w-full"
+                      >
+                        <option value="">All</option>
+                        <option value="false">Open</option>
+                        <option value="true">Cleared</option>
+                      </select>
+                    </div>
+
+                    <div className="md:col-span-2 xl:col-span-6 flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={resetDraftRow}
-                        className="btn btn-ghost btn-sm"
+                        onClick={() => setAppliedFilters(filterDraft)}
+                        className="btn btn-sm btn-primary"
                       >
-                        Cancel edit
+                        Apply filters
                       </button>
-                    ) : null}
-                  </div>
-                </div>
-                </form>
-              ) : (
-                <div className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-sm text-slate-600">
-                  Capture form hidden. Use the Show form button when you want to add
-                  or edit a row.
-                </div>
-              )}
-            </div>
-          </section>
 
-          <section className="card db-card">
-            <div className="card-body p-4">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="db-kicker">FILTERS</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFilterDraft(initialFilterDraft);
+                          setAppliedFilters(initialFilterDraft);
+                        }}
+                        className="btn btn-sm btn-ghost"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                ) : activeFilterCount > 0 ? (
                   <p className="text-sm text-slate-600">
-                    Hide this section when you want a cleaner reading view.
+                    {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"} active.
                   </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="db-chip db-chip-soft">
-                    {appliedFilters.q || appliedFilters.subject || appliedFilters.is_cleared
-                      ? "Filters applied"
-                      : "No filters applied"}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsFiltersPanelOpen((current) => !current)}
-                    className="btn btn-ghost btn-sm"
-                    aria-expanded={isFiltersPanelOpen}
-                  >
-                    {isFiltersPanelOpen ? "Hide filters" : "Show filters"}
-                  </button>
-                </div>
+                ) : (
+                  <p className="text-sm text-slate-500">No filters active.</p>
+                )}
               </div>
-              {isFiltersPanelOpen ? (
-                <div className="flex flex-wrap items-end gap-2">
-                <div className="min-w-[220px] flex-1">
-                  <label className="label pb-1">
-                    <span className="label-text text-xs">Search</span>
-                  </label>
-                  <input
-                    value={filterDraft.q}
-                    onChange={(event) =>
-                      setFilterDraft((current) => ({ ...current, q: event.target.value }))
-                    }
-                    className="input input-bordered input-sm w-full"
-                    placeholder="Title / notes / tag"
-                  />
-                </div>
-
-                <div className="min-w-[180px]">
-                  <label className="label pb-1">
-                    <span className="label-text text-xs">Subject</span>
-                  </label>
-                  <input
-                    value={filterDraft.subject}
-                    list="subject-filter-suggestions"
-                    onChange={(event) =>
-                      setFilterDraft((current) => ({
-                        ...current,
-                        subject: event.target.value,
-                      }))
-                    }
-                    className="input input-bordered input-sm w-full"
-                    placeholder="Any subject"
-                  />
-                  <datalist id="subject-filter-suggestions">
-                    {suggestions.subjects.map((subject) => (
-                      <option key={subject} value={subject} />
-                    ))}
-                  </datalist>
-                </div>
-
-                <div className="min-w-[160px]">
-                  <label className="label pb-1">
-                    <span className="label-text text-xs">Status</span>
-                  </label>
-                  <select
-                    value={filterDraft.is_cleared}
-                    onChange={(event) =>
-                      setFilterDraft((current) => ({
-                        ...current,
-                        is_cleared: event.target.value as FilterDraft["is_cleared"],
-                      }))
-                    }
-                    className="select select-bordered select-sm w-full"
-                  >
-                    <option value="">All</option>
-                    <option value="false">Open</option>
-                    <option value="true">Cleared</option>
-                  </select>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setAppliedFilters(filterDraft)}
-                  className="btn btn-sm btn-primary"
-                >
-                  Apply
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilterDraft(initialFilterDraft);
-                    setAppliedFilters(initialFilterDraft);
-                  }}
-                  className="btn btn-sm btn-ghost"
-                >
-                  Reset
-                </button>
-                </div>
-              ) : activeFilterCount > 0 ? (
-                <p className="text-sm text-slate-600">
-                  {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"} active.
-                </p>
-              ) : (
-                <p className="text-sm text-slate-500">
-                  No filters active.
-                </p>
-              )}
-            </div>
-          </section>
+            </section>
+          </div>
 
           <section className="db-table-shell rounded-[22px] border border-white/70 bg-white/85 shadow-sm backdrop-blur">
             <div className="db-table-toolbar flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 px-4 py-3">
               <div>
-                <p className="db-kicker">MAIN DATABASE</p>
+                <p className="db-kicker">LIVE LIST</p>
                 <h2 className={`${dashboardDisplayFont.className} text-xl font-semibold tracking-tight text-slate-950`}>
                   Doubts in this room
                 </h2>
+                <p className="text-sm text-slate-500">
+                  Cards on small screens, denser rows on large screens.
+                </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="db-chip">Visible rows: {doubts.length}</span>
@@ -2168,19 +2199,151 @@ export function DashboardClient() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="table table-zebra table-sm min-w-[1550px] db-table">
+            <div className="space-y-3 p-3 lg:hidden">
+              {isLoading ? (
+                Array.from({ length: 4 }).map((_, index) => (
+                  <div
+                    key={`mobile-skeleton-row-${index}`}
+                    className="rounded-2xl border border-slate-200/80 bg-white p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="skeleton h-16 w-16 shrink-0 rounded-xl" />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="skeleton h-4 w-10/12" />
+                        <div className="skeleton h-3 w-1/2" />
+                        <div className="skeleton h-3 w-11/12" />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : doubts.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+                  No doubts found for the current filters.
+                </div>
+              ) : (
+                doubts.map((item) => (
+                  <article
+                    key={`mobile-${item.id}`}
+                    className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm"
+                  >
+                    <VisibilityProbe onVisible={() => queueThumbnailFetch(item.id)}>
+                      <div
+                        className="flex items-start gap-3"
+                        onMouseEnter={() => queueThumbnailFetch(item.id)}
+                        onTouchStart={() => queueThumbnailFetch(item.id)}
+                      >
+                        {item.thumbnail_url_signed ? (
+                          <div className="h-16 w-16 overflow-hidden rounded-xl border border-slate-200">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={mediaCdnUrl(item.thumbnail_url_signed) ?? ""}
+                              alt="Doubt thumbnail"
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          </div>
+                        ) : (thumbnailStateById[item.id] ?? "idle") === "loading" ||
+                          (thumbnailStateById[item.id] ?? "idle") === "idle" ? (
+                          <div className="skeleton h-16 w-16 shrink-0 rounded-xl" />
+                        ) : (
+                          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-[10px] text-slate-500">
+                            No img
+                          </div>
+                        )}
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                              href={`/doubts/${item.id}?room=${item.room_id}`}
+                              className="db-row-title text-base font-semibold"
+                            >
+                              {item.title}
+                            </Link>
+                            <span className={difficultyBadgeClass(item.difficulty)}>
+                              {item.difficulty}
+                            </span>
+                            <span
+                              className={`badge ${item.is_cleared ? "badge-success" : "badge-warning"} badge-outline`}
+                            >
+                              {item.is_cleared ? "Cleared" : "Open"}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {item.subject} • {formatDate(item.updated_at)}
+                          </p>
+                          <p className="mt-2 text-sm leading-6 text-slate-700">
+                            {plainPreview(item.body_markdown, 180)}
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-1">
+                            {item.subtopics.slice(0, 3).map((tag) => (
+                              <span key={`${item.id}-mobile-sub-${tag}`} className="badge badge-info badge-outline">
+                                {tag}
+                              </span>
+                            ))}
+                            {item.error_tags.slice(0, 2).map((tag) => (
+                              <span key={`${item.id}-mobile-err-${tag}`} className="badge badge-error badge-outline">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            {syncingIds.includes(item.id) ? (
+                              <span className="badge badge-info badge-outline">Syncing</span>
+                            ) : null}
+                            {syncErrorIds.includes(item.id) ? (
+                              <span className="badge badge-error badge-outline">Sync failed</span>
+                            ) : null}
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startEdit(item)}
+                              className="btn btn-outline btn-primary btn-xs"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void onToggleCleared(item)}
+                              className={`btn btn-xs ${item.is_cleared ? "btn-success" : "btn-warning"} db-status-toggle`}
+                            >
+                              {item.is_cleared ? "Mark open" : "Mark cleared"}
+                            </button>
+                            <Link
+                              href={`/doubts/${item.id}?room=${item.room_id}`}
+                              className="btn btn-outline btn-xs"
+                            >
+                              Open
+                            </Link>
+                            {canDelete ? (
+                              <button
+                                type="button"
+                                onClick={() => void onDelete(item)}
+                                className="btn btn-outline btn-error btn-xs"
+                              >
+                                Delete
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    </VisibilityProbe>
+                  </article>
+                ))
+              )}
+            </div>
+
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="table table-zebra table-sm min-w-[980px] db-table">
                 <thead>
                 <tr>
-                  <th>Title</th>
-                  <th>Subject</th>
-                  <th>Subtopics</th>
-                  <th>Difficulty</th>
-                  <th>Errors</th>
-                  <th>Cleared</th>
-                  <th>Notes</th>
+                  <th>Question</th>
+                  <th>Tags</th>
+                  <th>Status</th>
+                  <th>Preview</th>
                   <th>Updated</th>
-                  <th>Action</th>
+                  <th>Actions</th>
                 </tr>
                 </thead>
 
@@ -2198,19 +2361,10 @@ export function DashboardClient() {
                         </div>
                       </td>
                       <td>
-                        <div className="skeleton h-3 w-20" />
+                        <div className="skeleton h-8 w-28 rounded-full" />
                       </td>
                       <td>
-                        <div className="skeleton h-3 w-28" />
-                      </td>
-                      <td>
-                        <div className="skeleton h-6 w-16 rounded-full" />
-                      </td>
-                      <td>
-                        <div className="skeleton h-3 w-28" />
-                      </td>
-                      <td>
-                        <div className="skeleton h-6 w-16 rounded-full" />
+                        <div className="skeleton h-6 w-24 rounded-full" />
                       </td>
                       <td>
                         <div className="skeleton h-3 w-52" />
@@ -2225,7 +2379,7 @@ export function DashboardClient() {
                   ))
                 ) : doubts.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-10 text-center text-sm text-slate-500">
+                    <td colSpan={6} className="py-10 text-center text-sm text-slate-500">
                       No doubts found for current filters.
                     </td>
                   </tr>
@@ -2235,14 +2389,13 @@ export function DashboardClient() {
                       <td>
                         <VisibilityProbe onVisible={() => queueThumbnailFetch(item.id)}>
                           <div
-                            className="flex min-w-[220px] items-start gap-3"
+                            className="flex min-w-[280px] items-start gap-3"
                             onMouseEnter={() => queueThumbnailFetch(item.id)}
                             onTouchStart={() => queueThumbnailFetch(item.id)}
                           >
                             {item.thumbnail_url_signed ? (
                               <div className="avatar">
                                 <div className="h-14 w-14 rounded-md border border-base-300">
-                                  {/* Dynamic signed URLs are not known at build time. */}
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
                                     src={mediaCdnUrl(item.thumbnail_url_signed) ?? ""}
@@ -2269,6 +2422,9 @@ export function DashboardClient() {
                               >
                                 {item.title}
                               </Link>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {item.subject} • {formatDate(item.updated_at)}
+                              </p>
                               <div className="mt-1 flex flex-wrap items-center gap-1">
                                 {syncingIds.includes(item.id) ? (
                                   <span className="badge badge-info badge-outline badge-xs">
@@ -2286,40 +2442,28 @@ export function DashboardClient() {
                         </VisibilityProbe>
                       </td>
 
-                      <td className="text-xs">{item.subject}</td>
-
                       <td>
-                        <div className="flex max-w-[180px] flex-wrap gap-1">
-                          {item.subtopics.length === 0 ? (
-                            <span className="text-xs text-base-content/50">-</span>
-                          ) : (
-                            item.subtopics.slice(0, 4).map((tag) => (
-                              <span
-                                key={`${item.id}-sub-${tag}`}
-                                className="badge badge-info badge-outline h-auto max-w-[170px] whitespace-normal break-words py-1 leading-tight"
-                              >
-                                {tag}
-                              </span>
-                            ))
-                          )}
-                        </div>
-                      </td>
-
-                      <td>
-                        <span className={difficultyBadgeClass(item.difficulty)}>
-                          {item.difficulty}
-                        </span>
-                      </td>
-
-                      <td>
-                        <div className="flex max-w-[180px] flex-wrap gap-1">
+                        <div className="flex max-w-[240px] flex-wrap gap-1">
+                          <span className={difficultyBadgeClass(item.difficulty)}>
+                            {item.difficulty}
+                          </span>
+                          {item.subtopics.slice(0, 2).map((tag) => (
+                            <span
+                              key={`${item.id}-sub-${tag}`}
+                              className="badge badge-info badge-outline h-auto max-w-[150px] whitespace-normal break-words py-1 leading-tight"
+                            >
+                              {tag}
+                            </span>
+                          ))}
                           {item.error_tags.length === 0 ? (
-                            <span className="text-xs text-base-content/50">-</span>
+                            item.subtopics.length === 0 ? (
+                              <span className="text-xs text-base-content/50">-</span>
+                            ) : null
                           ) : (
-                            item.error_tags.slice(0, 4).map((tag) => (
+                            item.error_tags.slice(0, 2).map((tag) => (
                               <span
                                 key={`${item.id}-err-${tag}`}
-                                className="badge badge-error badge-outline h-auto max-w-[170px] whitespace-normal break-words py-1 leading-tight"
+                                className="badge badge-error badge-outline h-auto max-w-[150px] whitespace-normal break-words py-1 leading-tight"
                               >
                                 {tag}
                               </span>
@@ -2329,16 +2473,23 @@ export function DashboardClient() {
                       </td>
 
                       <td>
-                        <button
-                          type="button"
-                          onClick={() => void onToggleCleared(item)}
-                          className={`btn btn-xs ${item.is_cleared ? "btn-success" : "btn-warning"} db-status-toggle`}
-                        >
-                          {item.is_cleared ? "Cleared" : "Open"}
-                        </button>
+                        <div className="flex flex-col items-start gap-2">
+                          <span
+                            className={`badge ${item.is_cleared ? "badge-success" : "badge-warning"} badge-outline`}
+                          >
+                            {item.is_cleared ? "Cleared" : "Open"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void onToggleCleared(item)}
+                            className={`btn btn-xs ${item.is_cleared ? "btn-success" : "btn-warning"} db-status-toggle`}
+                          >
+                            {item.is_cleared ? "Mark open" : "Mark cleared"}
+                          </button>
+                        </div>
                       </td>
 
-                      <td className="max-w-[260px] text-xs text-base-content/80">
+                      <td className="max-w-[320px] text-xs text-base-content/80">
                         {plainPreview(item.body_markdown, 160)}
                       </td>
 
@@ -2395,7 +2546,7 @@ export function DashboardClient() {
 
         <aside className="db-sidebar space-y-4 xl:sticky xl:top-6 xl:self-start">
           <section className="card db-card">
-            <div className="card-body gap-2 p-3">
+            <div className="card-body gap-2 p-4">
               <p className="db-kicker">SESSION</p>
               <h3 className={`${dashboardDisplayFont.className} text-xl font-semibold tracking-tight text-slate-950`}>
                 Workspace summary
@@ -2411,22 +2562,18 @@ export function DashboardClient() {
                   ? "Personal workspace selected."
                   : "Shared workspace selected. Changes sync with room members."}
               </p>
-              <button
-                type="button"
-                onClick={onSignOut}
-                className="btn btn-sm btn-outline mt-1 w-full"
-              >
-                Sign out
-              </button>
             </div>
           </section>
 
           <section className="card db-card">
-            <div className="card-body gap-3 p-3">
+            <div className="card-body gap-3 p-4">
               <p className="db-kicker">WORKSPACES</p>
               <h3 className={`${dashboardDisplayFont.className} text-lg font-semibold tracking-tight text-slate-950`}>
                 Switch room
               </h3>
+              <p className="text-sm text-slate-500">
+                Personal room for private revision, shared rooms for active collaboration.
+              </p>
               {isRoomsLoading ? (
                 <div className="space-y-2">
                   {Array.from({ length: 4 }).map((_, index) => (
@@ -2467,7 +2614,7 @@ export function DashboardClient() {
           </section>
 
           <section className="card db-card">
-            <div className="card-body gap-3 p-3">
+            <div className="card-body gap-3 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="db-kicker">ROOM TOOLS</p>
@@ -2489,107 +2636,107 @@ export function DashboardClient() {
 
               {isWorkspaceToolsOpen ? (
                 <>
-              <form onSubmit={onCreateRoom} className="space-y-2">
-                <p className="text-xs text-base-content/70">Create shared room</p>
-                <div className="flex gap-2">
-                  <input
-                    value={newRoomName}
-                    onChange={(event) => setNewRoomName(event.target.value)}
-                    className="input input-bordered input-sm w-full"
-                    placeholder="Team room name"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isRoomActionSubmitting}
-                    className="btn btn-primary btn-sm"
-                  >
-                    Create
-                  </button>
-                </div>
-              </form>
-
-              <form onSubmit={onJoinRoom} className="space-y-2">
-                <p className="text-xs text-base-content/70">Join room</p>
-                <div className="flex gap-2">
-                  <input
-                    value={joinCode}
-                    onChange={(event) => setJoinCode(event.target.value)}
-                    className="input input-bordered input-sm w-full"
-                    placeholder="Paste invite code"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isRoomActionSubmitting}
-                    className="btn btn-outline btn-sm"
-                  >
-                    Join
-                  </button>
-                </div>
-              </form>
-
-              <div className="space-y-2">
-                <p className="text-xs text-base-content/70">Invite code</p>
-                {selectedRoom && !selectedRoom.is_personal && selectedRoom.role === "owner" ? (
-                  <>
-                    <div className="flex flex-wrap gap-2">
+                  <form onSubmit={onCreateRoom} className="space-y-2">
+                    <p className="text-xs text-base-content/70">Create shared room</p>
+                    <div className="flex gap-2">
+                      <input
+                        value={newRoomName}
+                        onChange={(event) => setNewRoomName(event.target.value)}
+                        className="input input-bordered input-sm w-full"
+                        placeholder="Team room name"
+                      />
                       <button
-                        type="button"
-                        onClick={() => void onRotateInvite()}
+                        type="submit"
                         disabled={isRoomActionSubmitting}
-                        className="btn btn-sm btn-outline"
+                        className="btn btn-primary btn-sm"
                       >
-                        Rotate code
+                        Create
                       </button>
-                      {inviteData?.code ? (
-                        <button
-                          type="button"
-                          onClick={() => void onCopyInviteCode()}
-                          className="btn btn-sm btn-primary"
-                        >
-                          Copy
-                        </button>
-                      ) : null}
                     </div>
-                    {inviteData?.code ? (
-                      <code className="db-code-block block overflow-x-auto rounded-md p-2 text-xs">
-                        {inviteData.code}
-                      </code>
+                  </form>
+
+                  <form onSubmit={onJoinRoom} className="space-y-2">
+                    <p className="text-xs text-base-content/70">Join room</p>
+                    <div className="flex gap-2">
+                      <input
+                        value={joinCode}
+                        onChange={(event) => setJoinCode(event.target.value)}
+                        className="input input-bordered input-sm w-full"
+                        placeholder="Paste invite code"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isRoomActionSubmitting}
+                        className="btn btn-outline btn-sm"
+                      >
+                        Join
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="space-y-2">
+                    <p className="text-xs text-base-content/70">Invite code</p>
+                    {selectedRoom && !selectedRoom.is_personal && selectedRoom.role === "owner" ? (
+                      <>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void onRotateInvite()}
+                            disabled={isRoomActionSubmitting}
+                            className="btn btn-sm btn-outline"
+                          >
+                            Rotate code
+                          </button>
+                          {inviteData?.code ? (
+                            <button
+                              type="button"
+                              onClick={() => void onCopyInviteCode()}
+                              className="btn btn-sm btn-primary"
+                            >
+                              Copy
+                            </button>
+                          ) : null}
+                        </div>
+                        {inviteData?.code ? (
+                          <code className="db-code-block block overflow-x-auto rounded-md p-2 text-xs">
+                            {inviteData.code}
+                          </code>
+                        ) : (
+                          <p className="text-xs text-base-content/70">
+                            Rotate once to generate a code.
+                          </p>
+                        )}
+                      </>
                     ) : (
                       <p className="text-xs text-base-content/70">
-                        Rotate once to generate a code.
+                        Owner-only for shared rooms.
                       </p>
                     )}
-                  </>
-                ) : (
-                  <p className="text-xs text-base-content/70">
-                    Owner-only for shared rooms.
-                  </p>
-                )}
-              </div>
+                  </div>
 
-              <div className="space-y-2">
-                <p className="text-xs text-base-content/70">Members</p>
-                {isMembersLoading ? (
                   <div className="space-y-2">
-                    {Array.from({ length: 3 }).map((_, index) => (
-                      <div
-                        key={`member-skeleton-${index}`}
-                        className="skeleton h-6 w-full rounded-full"
-                      />
-                    ))}
+                    <p className="text-xs text-base-content/70">Members</p>
+                    {isMembersLoading ? (
+                      <div className="space-y-2">
+                        {Array.from({ length: 3 }).map((_, index) => (
+                          <div
+                            key={`member-skeleton-${index}`}
+                            className="skeleton h-6 w-full rounded-full"
+                          />
+                        ))}
+                      </div>
+                    ) : roomMembers.length === 0 ? (
+                      <p className="text-sm text-base-content/70">No members found.</p>
+                    ) : (
+                      <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto">
+                        {roomMembers.map((member) => (
+                          <span key={member.user_id} className="badge badge-outline">
+                            {formatUserLabel(member)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : roomMembers.length === 0 ? (
-                  <p className="text-sm text-base-content/70">No members found.</p>
-                ) : (
-                  <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto">
-                    {roomMembers.map((member) => (
-                      <span key={member.user_id} className="badge badge-outline">
-                        {formatUserLabel(member)}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
                 </>
               ) : (
                 <p className="text-sm text-slate-600">

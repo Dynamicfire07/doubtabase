@@ -125,7 +125,7 @@ export function SignupForm() {
   }
 
   return (
-    <form className="space-y-4" onSubmit={onSubmit}>
+    <form className="auth-form space-y-4" onSubmit={onSubmit}>
       <button
         type="button"
         disabled={isSubmitting || isGoogleSubmitting}
@@ -248,9 +248,9 @@ export function SignupForm() {
         {isSubmitting ? "Creating account..." : "Create account"}
       </button>
 
-      <p className="text-center text-sm text-base-content/70">
+      <p className="text-center text-sm text-slate-600">
         Already have an account?{" "}
-        <Link href="/login" className="link link-primary">
+        <Link href="/login" className="font-medium text-sky-700 underline underline-offset-4">
           Sign in
         </Link>
       </p>

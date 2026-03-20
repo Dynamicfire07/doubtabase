@@ -85,6 +85,18 @@ function formatCommentAuthor(comment: DoubtComment) {
   return `${comment.created_by_user_id.slice(0, 8)}...${comment.created_by_user_id.slice(-4)}`;
 }
 
+function difficultyBadgeClass(difficulty: Doubt["difficulty"]) {
+  if (difficulty === "easy") {
+    return "badge badge-outline db-difficulty-pill db-difficulty-pill-easy";
+  }
+
+  if (difficulty === "hard") {
+    return "badge badge-outline db-difficulty-pill db-difficulty-pill-hard";
+  }
+
+  return "badge badge-outline db-difficulty-pill db-difficulty-pill-medium";
+}
+
 export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
@@ -260,9 +272,17 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
       return;
     }
 
+    const payload = (await response.json()) as { item: DoubtComment };
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            comments: [...current.comments, payload.item],
+          }
+        : current,
+    );
     setCommentDraft("");
     setIsCommentSubmitting(false);
-    await load({ fresh: true });
   }
 
   if (isLoading) {
@@ -295,7 +315,7 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="detail-shell space-y-6">
       {actionError ? (
         <div role="alert" aria-live="assertive" className="alert alert-error">
           <span>{actionError}</span>
@@ -328,20 +348,24 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
 
       <article
         ref={articleRef}
-        className="card border border-base-300 bg-base-100 shadow-sm"
+        className="detail-card overflow-hidden rounded-[28px]"
       >
-        <div className="card-body">
-          <header className="mb-6 space-y-3">
-            <h1 className="text-2xl font-bold">{data.item.title}</h1>
-
-            <div className="flex flex-wrap gap-2 text-xs">
-              <span className="badge badge-outline">Room: {data.room.name}</span>
-              <span className="badge badge-outline">
-                Room role: {data.room.role}
-              </span>
-              <span className="badge badge-outline">Subject: {data.item.subject}</span>
-              <span className="badge badge-outline">
-                Difficulty: {data.item.difficulty}
+        <div className="border-b border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.88))] px-5 py-6 sm:px-7">
+          <p className="db-kicker">DOUBT DETAIL</p>
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-pretty text-3xl font-semibold tracking-tight text-slate-950">
+                {data.item.title}
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+                Room {data.room.name} • Updated {formatCommentTime(data.item.updated_at)}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="detail-chip">Subject: {data.item.subject}</span>
+              <span className="detail-chip">Role: {data.room.role}</span>
+              <span className={difficultyBadgeClass(data.item.difficulty)}>
+                {data.item.difficulty}
               </span>
               <span
                 className={`badge ${
@@ -353,125 +377,145 @@ export function DoubtDetailClient({ doubtId }: DoubtDetailClientProps) {
                 {data.item.is_cleared ? "Cleared" : "Open"}
               </span>
             </div>
-
-            <div className="flex flex-wrap gap-2 text-xs">
-              {data.item.subtopics.map((tag) => (
-                <span
-                  key={tag}
-                  className="badge badge-info badge-outline h-auto max-w-[220px] whitespace-normal break-words py-1 leading-tight"
-                >
-                  {tag}
-                </span>
-              ))}
-              {data.item.error_tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="badge badge-error badge-outline h-auto max-w-[240px] whitespace-normal break-words py-1 leading-tight"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </header>
-
-          <div className="rounded-box border border-base-300 bg-base-200 p-4">
-            <p className="whitespace-pre-wrap text-sm leading-relaxed">
-              {data.item.body_markdown}
-            </p>
           </div>
 
-          {data.attachments.length > 0 ? (
-            <section className="mt-6 space-y-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/70">
-                Attachments
-              </h2>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs">
+            {data.item.subtopics.map((tag) => (
+              <span
+                key={tag}
+                className="badge badge-info badge-outline h-auto max-w-[220px] whitespace-normal break-words py-1 leading-tight"
+              >
+                {tag}
+              </span>
+            ))}
+            {data.item.error_tags.map((tag) => (
+              <span
+                key={tag}
+                className="badge badge-error badge-outline h-auto max-w-[240px] whitespace-normal break-words py-1 leading-tight"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                {data.attachments.map((attachment) => (
-                  <div
-                    key={attachment.id}
-                    className="overflow-hidden rounded-box border border-base-300 bg-base-100"
-                  >
-                    {attachment.public_url_signed ? (
-                      <div>
-                        {/* Signed URLs are generated at runtime; Next/Image remote patterns are not static here. */}
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={mediaCdnUrl(attachment.public_url_signed) ?? ""}
-                          alt="Doubt attachment"
-                          className="h-64 w-full object-cover"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        <div className="flex justify-end border-t border-base-300 bg-base-100 p-2">
-                          <button
-                            type="button"
-                            className="btn btn-xs btn-primary"
-                            onClick={() =>
-                              setSelectedImageUrl(mediaCdnUrl(attachment.public_url_signed))
-                            }
-                          >
-                            View full image
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex h-64 items-center justify-center bg-base-200 text-sm text-base-content/60">
-                        Attachment unavailable
-                      </div>
-                    )}
-                  </div>
-                ))}
+        <div className="grid gap-6 px-5 py-6 sm:px-7 lg:grid-cols-[minmax(0,1.15fr)_320px]">
+          <div className="space-y-6">
+            <section className="detail-section-card rounded-[22px] p-5">
+              <p className="db-kicker">NOTES</p>
+              <div className="mt-3 rounded-[18px] border border-slate-200/80 bg-slate-50/90 p-4">
+                <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
+                  {data.item.body_markdown}
+                </p>
               </div>
             </section>
-          ) : null}
 
-          <section className="mt-6 space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/70">
-              Comments
-            </h2>
-
-            <form onSubmit={onSubmitComment} className="space-y-2">
-              <textarea
-                value={commentDraft}
-                onChange={(event) => setCommentDraft(event.target.value)}
-                className="textarea textarea-bordered w-full"
-                rows={3}
-                placeholder="Add your comment for this doubt..."
-                maxLength={2000}
-              />
-              <div className="flex items-center justify-end">
-                <button
-                  type="submit"
-                  disabled={isCommentSubmitting || !commentDraft.trim()}
-                  className="btn btn-sm btn-primary"
-                >
-                  {isCommentSubmitting ? "Posting..." : "Post comment"}
-                </button>
-              </div>
-            </form>
-
-            {data.comments.length === 0 ? (
-              <div className="rounded-box border border-base-300 bg-base-200 p-3 text-sm text-base-content/70">
-                No comments yet. Start the discussion.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {data.comments.map((comment) => (
-                  <div
-                    key={comment.id}
-                    className="rounded-box border border-base-300 bg-base-200 p-3"
-                  >
-                    <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs text-base-content/70">
-                      <span className="font-semibold">{formatCommentAuthor(comment)}</span>
-                      <span>{formatCommentTime(comment.created_at)}</span>
-                    </div>
-                    <p className="whitespace-pre-wrap text-sm">{comment.body}</p>
+            {data.attachments.length > 0 ? (
+              <section className="detail-section-card rounded-[22px] p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="db-kicker">ATTACHMENTS</p>
+                    <h2 className="mt-2 text-lg font-semibold text-slate-950">
+                      Visual context
+                    </h2>
                   </div>
-                ))}
+                  <span className="detail-chip">
+                    {data.attachments.length} image
+                    {data.attachments.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {data.attachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="overflow-hidden rounded-[20px] border border-slate-200/80 bg-white"
+                    >
+                      {attachment.public_url_signed ? (
+                        <div>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={mediaCdnUrl(attachment.public_url_signed) ?? ""}
+                            alt="Doubt attachment"
+                            className="h-64 w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                          <div className="flex justify-end border-t border-slate-200/80 bg-white p-3">
+                            <button
+                              type="button"
+                              className="btn btn-xs btn-primary"
+                              onClick={() =>
+                                setSelectedImageUrl(mediaCdnUrl(attachment.public_url_signed))
+                              }
+                            >
+                              View full image
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex h-64 items-center justify-center bg-slate-50 text-sm text-slate-500">
+                          Attachment unavailable
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </div>
+
+          <aside className="space-y-6">
+            <section className="detail-section-card rounded-[22px] p-5">
+              <p className="db-kicker">DISCUSSION</p>
+              <h2 className="mt-2 text-lg font-semibold text-slate-950">Comments</h2>
+
+              <form onSubmit={onSubmitComment} className="mt-4 space-y-3">
+                <textarea
+                  value={commentDraft}
+                  onChange={(event) => setCommentDraft(event.target.value)}
+                  className="textarea textarea-bordered w-full"
+                  rows={4}
+                  placeholder="Add your comment for this doubt..."
+                  maxLength={2000}
+                />
+                <div className="flex items-center justify-end">
+                  <button
+                    type="submit"
+                    disabled={isCommentSubmitting || !commentDraft.trim()}
+                    className="btn btn-sm btn-primary"
+                  >
+                    {isCommentSubmitting ? "Posting..." : "Post comment"}
+                  </button>
+                </div>
+              </form>
+
+              <div className="mt-4 space-y-3">
+                {data.comments.length === 0 ? (
+                  <div className="rounded-[18px] border border-slate-200/80 bg-slate-50/90 p-4 text-sm text-slate-500">
+                    No comments yet. Start the discussion.
+                  </div>
+                ) : (
+                  data.comments.map((comment) => (
+                    <div
+                      key={comment.id}
+                      className="rounded-[18px] border border-slate-200/80 bg-slate-50/90 p-4"
+                    >
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                        <span className="font-semibold text-slate-700">
+                          {formatCommentAuthor(comment)}
+                        </span>
+                        <span>{formatCommentTime(comment.created_at)}</span>
+                      </div>
+                      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                        {comment.body}
+                      </p>
+                    </div>
+                  ))
+                )}
               </div>
-            )}
-          </section>
+            </section>
+          </aside>
         </div>
       </article>
 
