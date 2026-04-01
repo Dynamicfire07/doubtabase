@@ -3,6 +3,9 @@ import { Geist } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import Link from "next/link";
 
+import "dialkit/styles.css";
+
+import { FeedbackTools } from "@/components/dev/feedback-tools";
 import { getCdnPreconnectOrigins, publicAssetUrl } from "@/lib/cdn";
 import "./globals.css";
 
@@ -40,8 +43,8 @@ export default function RootLayout({
         className={`${geistSans.variable} flex min-h-screen flex-col bg-base-200 font-sans text-base-content antialiased`}
       >
         <div className="flex-1">{children}</div>
-        <footer className="border-t border-base-300 bg-base-100/80 px-6 py-4 text-center text-sm text-base-content/70">
-          <div className="flex flex-wrap items-center justify-center gap-3">
+        <footer className="app-footer px-6 py-4 text-center text-sm text-base-content/70">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-3">
             <span>Made by Shaurya Jain</span>
             <span aria-hidden="true">•</span>
             <Link
@@ -52,6 +55,7 @@ export default function RootLayout({
             </Link>
           </div>
         </footer>
+        {process.env.NODE_ENV === "development" ? <FeedbackTools /> : null}
         {process.env.NODE_ENV === "production" ? <Analytics /> : null}
       </body>
     </html>

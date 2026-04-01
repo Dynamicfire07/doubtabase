@@ -1,10 +1,16 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   clearCachedLoginEmail,
   hasCachedLoginSessionHint,
@@ -41,6 +47,22 @@ export function LoginForm() {
     });
 
     async function redirectIfAuthenticated() {
+      const adminSessionResponse = await fetch("/api/auth/admin-session", {
+        cache: "no-store",
+      });
+
+      if (adminSessionResponse.ok) {
+        const adminSession = (await adminSessionResponse.json()) as {
+          authenticated?: boolean;
+        };
+
+        if (isMounted && adminSession.authenticated) {
+          setCachedLoginSessionHint(true);
+          router.replace("/dashboard");
+          return;
+        }
+      }
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -75,6 +97,38 @@ export function LoginForm() {
       writeCachedLoginEmail(normalizedEmail);
     } else {
       clearCachedLoginEmail();
+    }
+
+    const adminLoginResponse = await fetch("/api/auth/admin-login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: normalizedEmail,
+        password,
+      }),
+    });
+
+    if (adminLoginResponse.ok) {
+      setCachedLoginSessionHint(true);
+      router.replace("/dashboard");
+      router.refresh();
+      return;
+    }
+
+    if (adminLoginResponse.status === 503) {
+      const payload = (await adminLoginResponse.json()) as { error?: string };
+      setError(payload.error ?? "Local admin login is not ready yet.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (adminLoginResponse.status !== 401 && adminLoginResponse.status !== 404) {
+      const payload = (await adminLoginResponse.json()) as { error?: string };
+      setError(payload.error ?? "Admin login is unavailable right now.");
+      setIsSubmitting(false);
+      return;
     }
 
     const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -127,11 +181,11 @@ export function LoginForm() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: "easeOut" }}
     >
-      <motion.button
+      <Button
         type="button"
+        variant="outline"
         disabled={isSubmitting || isGoogleSubmitting}
-        className="btn btn-outline w-full"
-        whileTap={{ scale: 0.99 }}
+        className="w-full justify-center gap-3 rounded-full border-white/70 bg-white/88 py-6"
         onClick={() => {
           void onGoogleSignIn();
         }}
@@ -160,16 +214,17 @@ export function LoginForm() {
           />
         </svg>
         {isGoogleSubmitting ? "Redirecting..." : "Continue with Google"}
-      </motion.button>
+      </Button>
 
-      <div className="divider my-1 text-xs text-base-content/60">or</div>
+      <div className="flex items-center gap-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <div className="h-px flex-1 bg-slate-200" />
+        <span>or</span>
+        <div className="h-px flex-1 bg-slate-200" />
+      </div>
 
-      <div>
-        <label className="label py-1" htmlFor="email">
-          <span className="label-text">Email</span>
-        </label>
-        <input
-          className="input input-bordered w-full"
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
+        <Input
           id="email"
           type="email"
           autoComplete="email"
@@ -180,12 +235,9 @@ export function LoginForm() {
         />
       </div>
 
-      <div>
-        <label className="label py-1" htmlFor="password">
-          <span className="label-text">Password</span>
-        </label>
-        <input
-          className="input input-bordered w-full"
+      <div className="space-y-2">
+        <Label htmlFor="password">Password</Label>
+        <Input
           id="password"
           type="password"
           autoComplete="current-password"
@@ -196,46 +248,45 @@ export function LoginForm() {
         />
       </div>
 
-      <label className="label cursor-pointer justify-start gap-3 py-0">
-        <input
-          type="checkbox"
-          className="checkbox checkbox-sm"
+      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200/80 bg-white/72 px-3.5 py-3 text-sm text-slate-600">
+        <Checkbox
           checked={rememberEmail}
-          onChange={(event) => {
-            const checked = event.target.checked;
-            setRememberEmail(checked);
+          className="mt-0.5"
+          onCheckedChange={(checked) => {
+            const shouldRemember = checked === true;
+            setRememberEmail(shouldRemember);
 
-            if (!checked) {
+            if (!shouldRemember) {
               clearCachedLoginEmail();
             }
           }}
         />
-        <span className="label-text text-sm">Remember email on this device</span>
+        <span>Remember email on this device</span>
       </label>
 
       <AnimatePresence initial={false}>
         {error || callbackError ? (
           <motion.div
-            role="alert"
-            className="alert alert-error overflow-hidden py-2 text-sm"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <span>{error ?? callbackError}</span>
+            <Alert variant="destructive" className="overflow-hidden">
+              <AlertCircle className="size-4" />
+              <AlertDescription>{error ?? callbackError}</AlertDescription>
+            </Alert>
           </motion.div>
         ) : null}
       </AnimatePresence>
 
-      <motion.button
+      <Button
         type="submit"
         disabled={isSubmitting || isGoogleSubmitting}
-        className="btn btn-primary w-full"
-        whileTap={{ scale: 0.99 }}
+        className="w-full rounded-full py-6"
       >
         {isSubmitting ? "Signing in..." : "Sign in"}
-      </motion.button>
+      </Button>
 
       <p className="text-center text-sm text-slate-600">
         New here?{" "}

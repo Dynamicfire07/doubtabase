@@ -1,6 +1,6 @@
 export default function DoubtDetailLoading() {
   return (
-    <main className="detail-page min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+    <main className="detail-page min-h-screen px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <div className="mx-auto max-w-5xl space-y-4">
         <div className="skeleton h-9 w-56" />
         <div className="detail-card overflow-hidden rounded-[28px]">

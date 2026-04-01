@@ -1,15 +1,21 @@
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import {
+  getLocalAdminSession,
+  toAppUser,
+  type AppUser,
+} from "@/lib/auth/local-admin";
 import { hasSupabasePublicEnv, publicEnv } from "@/lib/env/public";
 import type { Database } from "@/lib/supabase/database.types";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type UserContext = {
   supabase: SupabaseClient<Database>;
-  user: User;
+  user: AppUser;
 };
 
 type UserContextResult =
@@ -17,6 +23,17 @@ type UserContextResult =
   | { context: null; error: NextResponse };
 
 export async function requireUserContext(): Promise<UserContextResult> {
+  const localAdminSession = await getLocalAdminSession();
+  if (localAdminSession) {
+    return {
+      context: {
+        supabase: createSupabaseAdminClient(),
+        user: localAdminSession.user,
+      },
+      error: null,
+    };
+  }
+
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -33,7 +50,7 @@ export async function requireUserContext(): Promise<UserContextResult> {
   return {
     context: {
       supabase,
-      user,
+      user: toAppUser(user),
     },
     error: null,
   };
@@ -97,7 +114,7 @@ async function requireBearerUserContext(
   }
 
   return {
-    context: { supabase, user },
+    context: { supabase, user: toAppUser(user) },
     error: null,
   };
 }

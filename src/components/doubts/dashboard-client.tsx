@@ -1129,7 +1129,12 @@ export function DashboardClient() {
   }, [selectedRoomId]);
 
   async function onSignOut() {
-    await supabase.auth.signOut();
+    await Promise.allSettled([
+      supabase.auth.signOut(),
+      fetch("/api/auth/admin-logout", {
+        method: "POST",
+      }),
+    ]);
     clearCachedLoginSessionHint();
     router.replace("/login");
     router.refresh();

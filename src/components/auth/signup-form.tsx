@@ -1,9 +1,14 @@
 "use client";
 
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { getAuthErrorMessage, getOAuthRedirectTo } from "@/lib/auth/oauth";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
@@ -26,6 +31,21 @@ export function SignupForm() {
     let isMounted = true;
 
     async function redirectIfAuthenticated() {
+      const adminSessionResponse = await fetch("/api/auth/admin-session", {
+        cache: "no-store",
+      });
+
+      if (adminSessionResponse.ok) {
+        const adminSession = (await adminSessionResponse.json()) as {
+          authenticated?: boolean;
+        };
+
+        if (isMounted && adminSession.authenticated) {
+          router.replace("/dashboard");
+          return;
+        }
+      }
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -126,10 +146,11 @@ export function SignupForm() {
 
   return (
     <form className="auth-form space-y-4" onSubmit={onSubmit}>
-      <button
+      <Button
         type="button"
+        variant="outline"
         disabled={isSubmitting || isGoogleSubmitting}
-        className="btn btn-outline w-full"
+        className="w-full justify-center gap-3 rounded-full border-white/70 bg-white/88 py-6"
         onClick={() => {
           void onGoogleSignIn();
         }}
@@ -158,16 +179,17 @@ export function SignupForm() {
           />
         </svg>
         {isGoogleSubmitting ? "Redirecting..." : "Continue with Google"}
-      </button>
+      </Button>
 
-      <div className="divider my-1 text-xs text-base-content/60">or</div>
+      <div className="flex items-center gap-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <div className="h-px flex-1 bg-slate-200" />
+        <span>or</span>
+        <div className="h-px flex-1 bg-slate-200" />
+      </div>
 
-      <div>
-        <label className="label py-1" htmlFor="name">
-          <span className="label-text">Name</span>
-        </label>
-        <input
-          className="input input-bordered w-full"
+      <div className="space-y-2">
+        <Label htmlFor="name">Name</Label>
+        <Input
           id="name"
           type="text"
           autoComplete="name"
@@ -178,12 +200,9 @@ export function SignupForm() {
         />
       </div>
 
-      <div>
-        <label className="label py-1" htmlFor="email">
-          <span className="label-text">Email</span>
-        </label>
-        <input
-          className="input input-bordered w-full"
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
+        <Input
           id="email"
           type="email"
           autoComplete="email"
@@ -194,12 +213,9 @@ export function SignupForm() {
         />
       </div>
 
-      <div>
-        <label className="label py-1" htmlFor="password">
-          <span className="label-text">Password</span>
-        </label>
-        <input
-          className="input input-bordered w-full"
+      <div className="space-y-2">
+        <Label htmlFor="password">Password</Label>
+        <Input
           id="password"
           type="password"
           autoComplete="new-password"
@@ -211,12 +227,9 @@ export function SignupForm() {
         />
       </div>
 
-      <div>
-        <label className="label py-1" htmlFor="confirm-password">
-          <span className="label-text">Confirm password</span>
-        </label>
-        <input
-          className="input input-bordered w-full"
+      <div className="space-y-2">
+        <Label htmlFor="confirm-password">Confirm password</Label>
+        <Input
           id="confirm-password"
           type="password"
           autoComplete="new-password"
@@ -229,24 +242,26 @@ export function SignupForm() {
       </div>
 
       {error || callbackError ? (
-        <div role="alert" className="alert alert-error py-2 text-sm">
-          <span>{error ?? callbackError}</span>
-        </div>
+        <Alert variant="destructive">
+          <AlertCircle className="size-4" />
+          <AlertDescription>{error ?? callbackError}</AlertDescription>
+        </Alert>
       ) : null}
 
       {success ? (
-        <div role="alert" className="alert alert-success py-2 text-sm">
-          <span>{success}</span>
-        </div>
+        <Alert className="border-emerald-200 bg-emerald-50/90 text-emerald-800">
+          <CheckCircle2 className="size-4" />
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
       ) : null}
 
-      <button
+      <Button
         type="submit"
         disabled={isSubmitting || isGoogleSubmitting}
-        className="btn btn-primary w-full"
+        className="w-full rounded-full py-6"
       >
         {isSubmitting ? "Creating account..." : "Create account"}
-      </button>
+      </Button>
 
       <p className="text-center text-sm text-slate-600">
         Already have an account?{" "}
